@@ -2,7 +2,7 @@ import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb } from '../_shared/tmdb.js';
-import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
+import { clientAddress, verifySupabaseAuthOptional } from '../_shared/verifySupabaseAuth.js';
 
 interface DetailsRequest {
   tmdbId?: number;
@@ -13,8 +13,11 @@ interface DetailsRequest {
 }
 
 export const handler = withHttp(async (event) => {
-  const user = await verifySupabaseAuth(event);
-  enforceRateLimit(`details:${user.id}`, 120);
+  const user = await verifySupabaseAuthOptional(event);
+  enforceRateLimit(
+    user ? `details:${user.id}` : `details:anon:${clientAddress(event)}`,
+    user ? 120 : 40,
+  );
 
   const { tmdbId, mediaType, seasonNumber, includeSpecials = false } =
     parseBody<DetailsRequest>(event);
@@ -23,14 +26,16 @@ export const handler = withHttp(async (event) => {
     throw new HttpError(400, 'tmdbId and mediaType ("movie" | "tv") are required');
   }
 
-  const db = supabaseUser();
-  const { data: tracked } = await db
-    .from('tracked_media')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('media_type', mediaType)
-    .eq('tmdb_id', tmdbId)
-    .maybeSingle();
+  const db = user ? supabaseUser() : null;
+  const { data: tracked } = db
+    ? await db
+        .from('tracked_media')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('media_type', mediaType)
+        .eq('tmdb_id', tmdbId)
+        .maybeSingle()
+    : { data: null };
 
   if (mediaType === 'movie') {
     const movie = await tmdb.movie(tmdbId);
@@ -51,11 +56,13 @@ export const handler = withHttp(async (event) => {
   const show = await tmdb.show(tmdbId);
   const seasons = show.seasons.filter((s) => includeSpecials || s.season_number > 0);
 
-  const { data: watched } = await db
-    .from('watched_episodes')
-    .select('season_number, episode_number')
-    .eq('user_id', user.id)
-    .eq('tmdb_show_id', tmdbId);
+  const { data: watched } = db
+    ? await db
+        .from('watched_episodes')
+        .select('season_number, episode_number')
+        .eq('user_id', user!.id)
+        .eq('tmdb_show_id', tmdbId)
+    : { data: null };
 
   const watchedKeys = new Set((watched ?? []).map((w) => `${w.season_number}:${w.episode_number}`));
 

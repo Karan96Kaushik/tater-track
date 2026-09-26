@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CalendarClock, Check, Loader2, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { mediaApi, type MediaDetails } from '@/lib/amplify/media-functions';
 import type { MediaType, TrackStatus } from '@/lib/supabase/types';
+import { useAuth } from '@/hooks/useAuth';
 import { useLibrary } from '@/hooks/useLibrary';
 import { formatDate, posterUrl, relativeAirDate } from '@/lib/utils';
 
@@ -29,6 +31,8 @@ const STATUS_ACTIONS: Array<{ status: TrackStatus; label: string }> = [
 ];
 
 export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogProps) {
+  const { user } = useAuth();
+  const canTrack = Boolean(user);
   const { entryFor, track, untrack, rate, refresh } = useLibrary();
   const [details, setDetails] = useState<MediaDetails | null>(null);
   const [loading, setLoading] = useState(false);
@@ -165,41 +169,50 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {STATUS_ACTIONS.map(({ status, label }) => (
-                <Button
-                  key={status}
-                  size="sm"
-                  variant={tracked?.status === status ? 'default' : 'outline'}
-                  onClick={() =>
-                    target &&
-                    void track({
-                      tmdbId: target.tmdbId,
-                      mediaType: target.mediaType,
-                      status,
-                      title: details.title,
-                    })
-                  }
-                >
-                  {label}
+            {canTrack ? (
+              <div className="flex flex-wrap gap-2">
+                {STATUS_ACTIONS.map(({ status, label }) => (
+                  <Button
+                    key={status}
+                    size="sm"
+                    variant={tracked?.status === status ? 'default' : 'outline'}
+                    onClick={() =>
+                      target &&
+                      void track({
+                        tmdbId: target.tmdbId,
+                        mediaType: target.mediaType,
+                        status,
+                        title: details.title,
+                      })
+                    }
+                  >
+                    {label}
+                  </Button>
+                ))}
+                {tracked && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (!target) return;
+                      void untrack(target);
+                      onOpenChange(false);
+                    }}
+                  >
+                    <Trash2 className="size-4" /> Remove
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-muted-foreground">Sign in to track this title.</p>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/login">Sign in</Link>
                 </Button>
-              ))}
-              {tracked && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    if (!target) return;
-                    void untrack(target);
-                    onOpenChange(false);
-                  }}
-                >
-                  <Trash2 className="size-4" /> Remove
-                </Button>
-              )}
-            </div>
+              </div>
+            )}
 
-            {tracked && (
+            {canTrack && tracked && (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="mr-1 text-xs text-muted-foreground">Your rating</span>
                 {Array.from({ length: 10 }, (_, index) => index + 1).map((value) => (
@@ -243,12 +256,16 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                       </option>
                     ))}
                   </select>
-                  <Button size="sm" variant="outline" onClick={() => void markSeason(true)}>
-                    <Check className="size-4" /> Mark season watched
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void markSeason(false)}>
-                    Clear season
-                  </Button>
+                  {canTrack && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => void markSeason(true)}>
+                        <Check className="size-4" /> Mark season watched
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void markSeason(false)}>
+                        Clear season
+                      </Button>
+                    </>
+                  )}
                   {loading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
                 </div>
 
@@ -260,20 +277,22 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                     );
                     return (
                       <li key={key}>
-                        <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
-                          <input
-                            type="checkbox"
-                            className="size-4 accent-primary"
-                            checked={episode.watched}
-                            disabled={pendingEpisode === key || unaired}
-                            onChange={(event) =>
-                              void toggleEpisode(
-                                episode.seasonNumber,
-                                episode.episodeNumber,
-                                event.target.checked,
-                              )
-                            }
-                          />
+                        <label className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
+                          {canTrack && (
+                            <input
+                              type="checkbox"
+                              className="size-4 accent-primary"
+                              checked={episode.watched}
+                              disabled={pendingEpisode === key || unaired}
+                              onChange={(event) =>
+                                void toggleEpisode(
+                                  episode.seasonNumber,
+                                  episode.episodeNumber,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                          )}
                           <span className="w-12 shrink-0 text-xs text-muted-foreground">
                             S{episode.seasonNumber}E{episode.episodeNumber}
                           </span>

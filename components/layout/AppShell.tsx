@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { CalendarClock, Library, LogOut, Popcorn, Search, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,9 @@ const NAV = [
 ];
 
 export function AppShell() {
-  const { user, signOut } = useAuth();
+  const { user, isGuest, signOut } = useAuth();
+  const browsing = isGuest && !user;
+  const links = browsing ? NAV.filter((item) => item.to === '/discover') : NAV;
 
   return (
     <div className="min-h-dvh bg-background text-foreground">
@@ -25,7 +27,7 @@ export function AppShell() {
           </div>
 
           <nav className="ml-auto hidden items-center gap-1 sm:flex">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
+            {links.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -43,17 +45,29 @@ export function AppShell() {
             ))}
           </nav>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ml-auto sm:ml-0"
-            title={user?.email ?? 'Sign out'}
-            onClick={() => void signOut()}
-          >
-            <LogOut className="size-4" />
-          </Button>
+          {browsing ? (
+            <Button asChild variant="outline" size="sm" className="ml-auto sm:ml-0">
+              <Link to="/login">Sign in</Link>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto sm:ml-0"
+              title={user?.email ?? 'Sign out'}
+              onClick={() => void signOut()}
+            >
+              <LogOut className="size-4" />
+            </Button>
+          )}
         </div>
       </header>
+
+      {browsing && (
+        <div className="border-b border-border bg-muted/40 px-4 py-2 text-center text-xs text-muted-foreground">
+          Browsing only. Sign in to save a watchlist or track episodes.
+        </div>
+      )}
 
       {!areFunctionsConfigured && (
         <div className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-300">
@@ -62,13 +76,14 @@ export function AppShell() {
         </div>
       )}
 
-      <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-6">
+      <main className={cn('mx-auto max-w-6xl px-4 py-6', links.length > 1 ? 'pb-24 sm:pb-6' : 'pb-6')}>
         <Outlet />
       </main>
 
       {/* Mobile tab bar: the PWA is installed to a phone home screen more often than not. */}
+      {links.length > 1 && (
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+        {links.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -85,6 +100,7 @@ export function AppShell() {
           </NavLink>
         ))}
       </nav>
+      )}
     </div>
   );
 }

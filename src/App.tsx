@@ -2,7 +2,8 @@ import { Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { Analytics } from '@vercel/analytics/react';
 import { AppShell } from '@/components/layout/AppShell';
-import { RequireAuth } from '@/components/auth/RequireAuth';
+import { RequireAuth, SignedInOnly } from '@/components/auth/RequireAuth';
+import { ResetPassword } from '@/components/auth/ResetPassword';
 import { SignInCard } from '@/components/auth/SignInCard';
 import { DiscoverView } from '@/components/media/DiscoverView';
 import { LibraryView } from '@/components/media/LibraryView';
@@ -17,6 +18,7 @@ export default function App() {
       <LibraryProvider>
         <Routes>
           <Route path="/login" element={<SignInCard />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             element={
               <RequireAuth>
@@ -24,11 +26,39 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route index element={<LibraryView />} />
+            <Route
+              index
+              element={
+                <SignedInOnly>
+                  <LibraryView />
+                </SignedInOnly>
+              }
+            />
             <Route path="discover" element={<DiscoverView />} />
-            <Route path="upcoming" element={<UpcomingView />} />
-            <Route path="settings" element={<SettingsPanel />} />
-            <Route path="*" element={<LibraryView />} />
+            <Route
+              path="upcoming"
+              element={
+                <SignedInOnly>
+                  <UpcomingView />
+                </SignedInOnly>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <SignedInOnly>
+                  <SettingsPanel />
+                </SignedInOnly>
+              }
+            />
+            <Route
+              path="*"
+              element={
+                <SignedInOnly>
+                  <LibraryView />
+                </SignedInOnly>
+              }
+            />
           </Route>
         </Routes>
         <Toaster theme="dark" position="top-center" richColors />

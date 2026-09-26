@@ -63,14 +63,14 @@ export interface MediaDetails {
 
 export const mediaApi = {
   search: (params: { query: string; mediaType?: MediaType | 'multi'; page?: number }) =>
-    callFunction<SearchResponse>('tmdbSearchUrl', params),
+    callFunction<SearchResponse>('tmdbSearchUrl', params, { auth: 'optional' }),
 
   details: (params: {
     tmdbId: number;
     mediaType: MediaType;
     seasonNumber?: number;
     includeSpecials?: boolean;
-  }) => callFunction<MediaDetails>('tmdbDetailsUrl', params),
+  }) => callFunction<MediaDetails>('tmdbDetailsUrl', params, { auth: 'optional' }),
 
   list: (status?: TrackStatus | 'all') =>
     callFunction<{ items: TrackedMedia[] }>('trackMediaUrl', { action: 'list', status }),

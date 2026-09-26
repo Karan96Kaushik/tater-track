@@ -29,10 +29,16 @@ export function functionUrl(key: FunctionKey): string | null {
 
 export const areFunctionsConfigured = Boolean(functionUrl('tmdbSearchUrl'));
 
+interface CallOptions {
+  /** Search and title details work without a session. Tracking calls stay signed-in only. */
+  auth?: 'required' | 'optional';
+}
+
 /** POSTs to a Lambda Function URL with the current Supabase access token. */
 export async function callFunction<TResponse, TBody extends object = object>(
   key: FunctionKey,
   body: TBody,
+  options: CallOptions = {},
 ): Promise<TResponse> {
   const url = functionUrl(key);
   if (!url) {
@@ -44,13 +50,15 @@ export async function callFunction<TResponse, TBody extends object = object>(
 
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) throw new FunctionError(401, 'You need to sign in again.');
+  if (!token && options.auth !== 'optional') {
+    throw new FunctionError(401, 'You need to sign in again.');
+  }
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
   });

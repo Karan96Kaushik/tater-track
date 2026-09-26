@@ -1,7 +1,7 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { tmdb, type TmdbSearchResult } from '../_shared/tmdb.js';
-import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
+import { clientAddress, verifySupabaseAuthOptional } from '../_shared/verifySupabaseAuth.js';
 
 interface SearchRequest {
   query?: string;
@@ -37,8 +37,11 @@ function normalise(result: TmdbSearchResult, fallbackType?: 'movie' | 'tv'): Sea
 }
 
 export const handler = withHttp(async (event) => {
-  const user = await verifySupabaseAuth(event);
-  enforceRateLimit(`search:${user.id}`, 90);
+  const user = await verifySupabaseAuthOptional(event);
+  enforceRateLimit(
+    user ? `search:${user.id}` : `search:anon:${clientAddress(event)}`,
+    user ? 90 : 30,
+  );
 
   const { query, mediaType = 'multi', page = 1 } = parseBody<SearchRequest>(event);
   const trimmed = query?.trim() ?? '';

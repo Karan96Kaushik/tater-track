@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Popcorn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,14 +14,18 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { isSupabaseConfigured } from '@/utils/supabase';
 
-type Mode = 'signin' | 'signup' | 'magic';
+type Mode = 'signin' | 'signup' | 'magic' | 'forgot';
 
 export function SignInCard() {
-  const { user, loading, signInWithPassword, signUp, signInWithMagicLink } = useAuth();
-  const [mode, setMode] = useState<Mode>('signin');
+  const { user, loading, browseAsGuest, signInWithPassword, signUp, signInWithMagicLink, requestPasswordReset } =
+    useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<Mode>(searchParams.get('reset') === '1' ? 'forgot' : 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   if (!loading && user) return <Navigate to="/" replace />;
 
@@ -29,7 +33,10 @@ export function SignInCard() {
     event.preventDefault();
     setBusy(true);
     try {
-      if (mode === 'magic') {
+      if (mode === 'forgot') {
+        await requestPasswordReset(email);
+        setResetSent(true);
+      } else if (mode === 'magic') {
         await signInWithMagicLink(email);
         toast.success('Check your inbox for the sign-in link');
       } else if (mode === 'signup') {
@@ -41,7 +48,9 @@ export function SignInCard() {
         await signInWithPassword(email, password);
       }
     } catch (cause) {
-      toast.error('Sign in failed', { description: (cause as Error).message });
+      toast.error(mode === 'forgot' ? 'Could not send reset link' : 'Sign in failed', {
+        description: (cause as Error).message,
+      });
     } finally {
       setBusy(false);
     }
@@ -54,7 +63,9 @@ export function SignInCard() {
           <Popcorn className="mb-2 size-8 text-primary" />
           <CardTitle className="text-xl">tater-track</CardTitle>
           <CardDescription>
-            Track what you watch and see what airs next.
+            {mode === 'forgot'
+              ? 'We will email you a link to choose a new password.'
+              : 'Track what you watch and see what airs next.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -65,47 +76,115 @@ export function SignInCard() {
             </p>
           )}
 
-          <form onSubmit={onSubmit} className="space-y-3">
-            <Input
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-            {mode !== 'magic' && (
+          {mode === 'forgot' && resetSent ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                If an account exists for {email}, a reset link is on its way. Open it on this device
+                to choose a new password.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setResetSent(false);
+                  setMode('signin');
+                }}
+              >
+                Back to sign in
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={onSubmit} className="space-y-3">
               <Input
-                type="password"
+                type="email"
                 required
-                minLength={8}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                placeholder="Password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
               />
-            )}
-            <Button type="submit" className="w-full" disabled={busy || !isSupabaseConfigured}>
-              {mode === 'signup' ? 'Create account' : mode === 'magic' ? 'Email me a link' : 'Sign in'}
-            </Button>
-          </form>
+              {mode !== 'magic' && mode !== 'forgot' && (
+                <Input
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              )}
+              {mode === 'signin' && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setMode('forgot')}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+              <Button type="submit" className="w-full" disabled={busy || !isSupabaseConfigured}>
+                {mode === 'signup'
+                  ? 'Create account'
+                  : mode === 'magic'
+                    ? 'Email me a link'
+                    : mode === 'forgot'
+                      ? 'Send reset link'
+                      : 'Sign in'}
+              </Button>
+            </form>
+          )}
 
-          <div className="mt-4 flex justify-between text-xs text-muted-foreground">
-            <button
+          <div className="mt-4 border-t border-border pt-4">
+            <Button
               type="button"
-              className="hover:text-foreground"
-              onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                browseAsGuest();
+                navigate('/discover', { replace: true });
+              }}
             >
-              {mode === 'signup' ? 'Have an account?' : 'Create an account'}
-            </button>
-            <button
-              type="button"
-              className="hover:text-foreground"
-              onClick={() => setMode(mode === 'magic' ? 'signin' : 'magic')}
-            >
-              {mode === 'magic' ? 'Use a password' : 'Use a magic link'}
-            </button>
+              Browse without an account
+            </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Search and open titles. Nothing is saved.
+            </p>
           </div>
+
+          {!(mode === 'forgot' && resetSent) && (
+            <div className="mt-4 flex justify-between text-xs text-muted-foreground">
+              {mode === 'forgot' ? (
+                <button
+                  type="button"
+                  className="hover:text-foreground"
+                  onClick={() => setMode('signin')}
+                >
+                  Back to sign in
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="hover:text-foreground"
+                    onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
+                  >
+                    {mode === 'signup' ? 'Have an account?' : 'Create an account'}
+                  </button>
+                  <button
+                    type="button"
+                    className="hover:text-foreground"
+                    onClick={() => setMode(mode === 'magic' ? 'signin' : 'magic')}
+                  >
+                    {mode === 'magic' ? 'Use a password' : 'Use a magic link'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

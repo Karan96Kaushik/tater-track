@@ -8,14 +8,24 @@ export interface AuthedUser {
   email: string | null;
 }
 
+function authorizationHeader(event: LambdaFunctionURLEvent): string {
+  return event.headers?.authorization ?? event.headers?.Authorization ?? '';
+}
+
 function bearerToken(event: LambdaFunctionURLEvent): string {
-  const header =
-    event.headers?.authorization ?? event.headers?.Authorization ?? '';
+  const header = authorizationHeader(event);
   const [scheme, token] = header.split(' ');
   if (scheme?.toLowerCase() !== 'bearer' || !token) {
     throw new HttpError(401, 'Missing bearer token');
   }
   return token;
+}
+
+/** Best-effort client address for anonymous rate limits. */
+export function clientAddress(event: LambdaFunctionURLEvent): string {
+  const forwarded = event.headers?.['x-forwarded-for'] ?? event.headers?.['X-Forwarded-For'];
+  const ip = forwarded?.split(',')[0]?.trim() || event.requestContext?.http?.sourceIp;
+  return ip || 'unknown';
 }
 
 /** Function URL auth type is NONE, so the Supabase JWT is the only gate. */
@@ -43,4 +53,18 @@ export async function verifySupabaseAuth(
 
   bindSupabaseUser(token);
   return { id: user.id, email: user.email ?? null };
+}
+
+/**
+ * Search and details can run without a session. A present but invalid token
+ * still fails closed so a stale login is not treated as a guest.
+ */
+export async function verifySupabaseAuthOptional(
+  event: LambdaFunctionURLEvent,
+): Promise<AuthedUser | null> {
+  if (!authorizationHeader(event).trim()) {
+    clearSupabaseUser();
+    return null;
+  }
+  return verifySupabaseAuth(event);
 }
