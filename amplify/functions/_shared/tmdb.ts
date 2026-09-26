@@ -82,6 +82,37 @@ async function writeCache(key: string, payload: unknown, ttlSeconds: number): Pr
   if (error) console.warn('tmdb_cache write failed', error.message);
 }
 
+/** TMDB occasionally resets connections; retry transient failures with backoff. */
+async function fetchWithRetry(url: URL, attempts = 3): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${env.tmdbAccessToken}`,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (response.status >= 500 && attempt < attempts) {
+        lastError = new Error(`TMDB responded ${response.status}`);
+      } else {
+        return response;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    if (attempt < attempts) {
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** (attempt - 1)));
+    }
+  }
+
+  console.error('TMDB request failed after retries', lastError);
+  throw new HttpError(502, 'Could not reach TMDB');
+}
+
 export async function tmdbFetch<T>(
   path: string,
   params: Record<string, string | number | boolean | undefined> = {},
@@ -100,12 +131,7 @@ export async function tmdbFetch<T>(
     if (hit) return hit;
   }
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${env.tmdbAccessToken}`,
-      Accept: 'application/json',
-    },
-  });
+  const response = await fetchWithRetry(url);
 
   if (response.status === 404) {
     throw new HttpError(404, 'Not found on TMDB');

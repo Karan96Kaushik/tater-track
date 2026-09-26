@@ -15,11 +15,20 @@ async function api<T>(path: string, params: Record<string, string> = {}): Promis
   const url = new URL(`${BASE}${path}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
-  if (!response.ok) throw new Error(`${path} → ${response.status} ${await response.text()}`);
-  return (await response.json()) as T;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error(`${path} → ${response.status} ${await response.text()}`);
+      return (await response.json()) as T;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    }
+  }
+  throw lastError;
 }
 
 interface SearchResponse {
