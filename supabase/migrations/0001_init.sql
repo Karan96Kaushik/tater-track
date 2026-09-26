@@ -31,6 +31,15 @@ create table if not exists public.user_settings (
   updated_at timestamptz not null default now()
 );
 
+-- This project may already host a `user_settings` table from another app, in
+-- which case the create above is a no-op; add the columns tater-track needs.
+alter table public.user_settings
+  add column if not exists region text not null default 'US',
+  add column if not exists include_specials boolean not null default false,
+  add column if not exists upcoming_window_days integer not null default 30,
+  add column if not exists theme text not null default 'system',
+  add column if not exists updated_at timestamptz not null default now();
+
 -- ---------------------------------------------------------------------------
 -- tracked_media: one row per movie/show a user has engaged with
 -- ---------------------------------------------------------------------------

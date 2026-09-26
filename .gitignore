@@ -5,8 +5,11 @@ dist.zip
 .env.local
 .DS_Store
 *.log
+*.tsbuildinfo
 
 # Amplify
 .amplify/
 amplify_outputs*.json
 !amplify_outputs.json
+
+amplify.yml

@@ -1,12 +1,12 @@
 {
-  "version": "1.3",
+  "version": "1.5",
   "custom": {
-    "tmdbSearchUrl": "",
-    "tmdbDetailsUrl": "",
-    "trackMediaUrl": "",
-    "upcomingEpisodesUrl": "",
-    "reportIssueUrl": "",
-    "amplifyTestUrl": "",
-    "aiChatUrl": ""
+    "tmdbSearchUrl": "https://d5uy62dwlplwilyuaejdofvl3y0kwjki.lambda-url.ap-south-1.on.aws/",
+    "tmdbDetailsUrl": "https://y4wl5gvo75ib6imf23wh2cwzra0stoeg.lambda-url.ap-south-1.on.aws/",
+    "trackMediaUrl": "https://mqirr23tgxwz7r27jqmko66wke0ubuqk.lambda-url.ap-south-1.on.aws/",
+    "upcomingEpisodesUrl": "https://f7i3d7oklronabjxxkv5vfdvdm0gvfsx.lambda-url.ap-south-1.on.aws/",
+    "reportIssueUrl": "https://7dhghuqx5eocfa5zwmvd6xei5u0jzqjt.lambda-url.ap-south-1.on.aws/",
+    "amplifyTestUrl": "https://c42lbovoo4mintxs3zygpvk7km0hrgru.lambda-url.ap-south-1.on.aws/",
+    "aiChatUrl": "https://wq23fz2twofbzoronaoh74trj40tatud.lambda-url.ap-south-1.on.aws/"
   }
 }
