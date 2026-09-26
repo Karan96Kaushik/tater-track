@@ -11,6 +11,7 @@
     "amplify:sandbox": "npx ampx sandbox",
     "amplify:secret:tmdb": "npx ampx sandbox secret set TMDB_ACCESS_TOKEN",
     "amplify:secret:supabase": "npx ampx sandbox secret set VITE_SUPABASE_SECRET_KEY",
+    "test:tmdb": "tsx scripts/test-tmdb.ts",
     "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {

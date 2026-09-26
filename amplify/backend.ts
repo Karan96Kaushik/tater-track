@@ -1,3 +1,4 @@
+import './loadEnv.js';
 import { defineBackend } from '@aws-amplify/backend';
 import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 import { aiChat } from './functions/ai-chat/resource.js';

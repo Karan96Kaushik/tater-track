@@ -1,7 +1,7 @@
 export type MediaType = 'movie' | 'tv';
 export type TrackStatus = 'watchlist' | 'watching' | 'completed' | 'dropped';
 
-export interface TrackedMedia {
+export type TrackedMedia = {
   id: string;
   user_id: string;
   tmdb_id: number;
@@ -20,7 +20,7 @@ export interface TrackedMedia {
   updated_at: string;
 }
 
-export interface WatchedEpisode {
+export type WatchedEpisode = {
   id: string;
   user_id: string;
   tmdb_show_id: number;
@@ -31,7 +31,7 @@ export interface WatchedEpisode {
   watched_at: string;
 }
 
-export interface UpcomingEpisode {
+export type UpcomingEpisode = {
   user_id: string;
   tmdb_show_id: number;
   season_number: number;
@@ -45,7 +45,7 @@ export interface UpcomingEpisode {
   refreshed_at: string;
 }
 
-export interface UserSettings {
+export type UserSettings = {
   user_id: string;
   region: string;
   include_specials: boolean;
@@ -55,7 +55,7 @@ export interface UserSettings {
   updated_at: string;
 }
 
-export interface UserBackup {
+export type UserBackup = {
   id: string;
   user_id: string;
   label: string | null;
@@ -63,7 +63,7 @@ export interface UserBackup {
   created_at: string;
 }
 
-export interface IssueReport {
+export type IssueReport = {
   id: string;
   user_id: string | null;
   email: string | null;
@@ -73,7 +73,7 @@ export interface IssueReport {
   created_at: string;
 }
 
-export interface TmdbCacheEntry {
+export type TmdbCacheEntry = {
   cache_key: string;
   payload: unknown;
   fetched_at: string;
