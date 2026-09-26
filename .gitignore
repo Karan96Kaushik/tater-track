@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist.zip
+.env
+.env.local
+.DS_Store
+*.log
+
+# Amplify
+.amplify/
+amplify_outputs*.json
+!amplify_outputs.json

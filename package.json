@@ -1,0 +1,53 @@
+{
+  "name": "tater-track",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit false --emitDeclarationOnly false",
+    "amplify:sandbox": "npx ampx sandbox",
+    "amplify:secret:tmdb": "npx ampx sandbox secret set TMDB_ACCESS_TOKEN",
+    "amplify:secret:supabase": "npx ampx sandbox secret set VITE_SUPABASE_SECRET_KEY",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@radix-ui/react-tabs": "^1.1.3",
+    "@supabase/supabase-js": "^2.49.4",
+    "@vercel/analytics": "^1.5.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.487.0",
+    "next-themes": "^0.4.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.55.0",
+    "react-router-dom": "^7.5.0",
+    "sonner": "^2.0.3",
+    "tailwind-merge": "^3.2.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@aws-amplify/backend": "^1.16.1",
+    "@aws-amplify/backend-cli": "^1.7.2",
+    "@tailwindcss/postcss": "^4.1.3",
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "aws-cdk-lib": "^2.189.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.25.2",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.2.5"
+  }
+}

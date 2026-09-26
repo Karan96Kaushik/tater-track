@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.2 0.01 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.01 264);
+  --primary: oklch(0.62 0.19 42);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.005 264);
+  --secondary-foreground: oklch(0.25 0.01 264);
+  --muted: oklch(0.96 0.005 264);
+  --muted-foreground: oklch(0.55 0.01 264);
+  --accent: oklch(0.95 0.01 264);
+  --accent-foreground: oklch(0.25 0.01 264);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.92 0.005 264);
+  --ring: oklch(0.62 0.19 42);
+}
+
+.dark {
+  --background: oklch(0.17 0.01 264);
+  --foreground: oklch(0.96 0.003 264);
+  --card: oklch(0.21 0.012 264);
+  --card-foreground: oklch(0.96 0.003 264);
+  --primary: oklch(0.72 0.17 55);
+  --primary-foreground: oklch(0.18 0.01 264);
+  --secondary: oklch(0.27 0.012 264);
+  --secondary-foreground: oklch(0.96 0.003 264);
+  --muted: oklch(0.27 0.012 264);
+  --muted-foreground: oklch(0.68 0.01 264);
+  --accent: oklch(0.3 0.015 264);
+  --accent-foreground: oklch(0.96 0.003 264);
+  --destructive: oklch(0.62 0.21 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.3 0.012 264);
+  --ring: oklch(0.72 0.17 55);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+}
