@@ -63,6 +63,31 @@ export interface UserBackup {
   created_at: string;
 }
 
+export interface IssueReport {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  category: string | null;
+  message: string;
+  context: unknown;
+  created_at: string;
+}
+
+export interface TmdbCacheEntry {
+  cache_key: string;
+  payload: unknown;
+  fetched_at: string;
+  expires_at: string;
+}
+
+/** Matches the shape `supabase gen types typescript` emits per table. */
+interface TableDef<Row, Insert, Update = Partial<Row>> {
+  Row: Row;
+  Insert: Insert;
+  Update: Update;
+  Relationships: [];
+}
+
 /**
  * Hand-maintained stand-in for `supabase gen types typescript`.
  * Regenerate once the project ref is known.
@@ -70,65 +95,42 @@ export interface UserBackup {
 export interface Database {
   public: {
     Tables: {
-      user_settings: {
-        Row: UserSettings;
-        Insert: Partial<UserSettings> & { user_id: string };
-        Update: Partial<UserSettings>;
-      };
-      tracked_media: {
-        Row: TrackedMedia;
-        Insert: Partial<TrackedMedia> & {
+      user_settings: TableDef<UserSettings, Partial<UserSettings> & { user_id: string }>;
+      tracked_media: TableDef<
+        TrackedMedia,
+        Partial<TrackedMedia> & {
           user_id: string;
           tmdb_id: number;
           media_type: MediaType;
           title: string;
-        };
-        Update: Partial<TrackedMedia>;
-      };
-      watched_episodes: {
-        Row: WatchedEpisode;
-        Insert: Partial<WatchedEpisode> & {
+        }
+      >;
+      watched_episodes: TableDef<
+        WatchedEpisode,
+        Partial<WatchedEpisode> & {
           user_id: string;
           tmdb_show_id: number;
           season_number: number;
           episode_number: number;
-        };
-        Update: Partial<WatchedEpisode>;
-      };
-      upcoming_episodes: {
-        Row: UpcomingEpisode;
-        Insert: UpcomingEpisode;
-        Update: Partial<UpcomingEpisode>;
-      };
-      user_backups: {
-        Row: UserBackup;
-        Insert: Partial<UserBackup> & { user_id: string; payload: unknown };
-        Update: Partial<UserBackup>;
-      };
-      issue_reports: {
-        Row: {
-          id: string;
-          user_id: string | null;
-          email: string | null;
-          category: string | null;
-          message: string;
-          context: unknown;
-          created_at: string;
-        };
-        Insert: { user_id?: string | null; email?: string | null; category?: string | null; message: string; context?: unknown };
-        Update: never;
-      };
-      tmdb_cache: {
-        Row: { cache_key: string; payload: unknown; fetched_at: string; expires_at: string };
-        Insert: { cache_key: string; payload: unknown; expires_at: string };
-        Update: { payload?: unknown; expires_at?: string };
-      };
+        }
+      >;
+      upcoming_episodes: TableDef<UpcomingEpisode, UpcomingEpisode>;
+      user_backups: TableDef<UserBackup, Partial<UserBackup> & { user_id: string; payload: unknown }>;
+      issue_reports: TableDef<
+        IssueReport,
+        Partial<IssueReport> & { message: string }
+      >;
+      tmdb_cache: TableDef<
+        TmdbCacheEntry,
+        Partial<TmdbCacheEntry> & { cache_key: string; payload: unknown; expires_at: string }
+      >;
     };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Views: { [_ in never]: never };
+    Functions: { [_ in never]: never };
     Enums: {
       media_type: MediaType;
       track_status: TrackStatus;
     };
+    CompositeTypes: { [_ in never]: never };
   };
 }
