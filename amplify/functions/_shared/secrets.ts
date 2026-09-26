@@ -1,3 +1,4 @@
+import { normalizeSupabaseUrl } from '../../../lib/supabase/url.js';
 import { HttpError } from './http.js';
 
 export function requireEnv(name: string): string {
@@ -11,10 +12,10 @@ export function requireEnv(name: string): string {
 
 export const env = {
   get supabaseUrl() {
-    return requireEnv('VITE_SUPABASE_URL');
+    return normalizeSupabaseUrl(requireEnv('VITE_SUPABASE_URL_TATER')) ?? '';
   },
   get supabaseSecretKey() {
-    return requireEnv('VITE_SUPABASE_SECRET_KEY');
+    return requireEnv('VITE_SUPABASE_SECRET_KEY_TATER');
   },
   get tmdbAccessToken() {
     return requireEnv('TMDB_ACCESS_TOKEN');

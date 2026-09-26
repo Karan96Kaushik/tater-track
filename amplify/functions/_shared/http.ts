@@ -1,12 +1,10 @@
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
 
-export const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Max-Age': '86400',
-};
-
+/**
+ * CORS belongs to the Function URL (see amplify/backend.ts). Returning the
+ * headers from here too makes AWS emit them twice, which browsers reject with
+ * "Access-Control-Allow-Origin header contains multiple values".
+ */
 export class HttpError extends Error {
   constructor(
     readonly status: number,
@@ -20,7 +18,7 @@ export class HttpError extends Error {
 export function json(status: number, body: unknown): LambdaFunctionURLResult {
   return {
     statusCode: status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
 }
@@ -45,10 +43,8 @@ export function withHttp(
   handler: (event: LambdaFunctionURLEvent) => Promise<LambdaFunctionURLResult>,
 ) {
   return async (event: LambdaFunctionURLEvent): Promise<LambdaFunctionURLResult> => {
+    // Preflight is answered by the Function URL itself and never reaches here.
     const method = event.requestContext?.http?.method ?? 'POST';
-    if (method === 'OPTIONS') {
-      return { statusCode: 204, headers: corsHeaders, body: '' };
-    }
     if (method !== 'POST') {
       return json(405, { error: 'Method not allowed' });
     }

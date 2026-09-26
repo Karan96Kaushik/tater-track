@@ -10,6 +10,6 @@ export const aiChat = defineFunction({
   entry: './handler.ts',
   timeoutSeconds: 30,
   environment: {
-    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? '',
+    VITE_SUPABASE_URL_TATER: process.env.VITE_SUPABASE_URL_TATER ?? '',
   },
 });

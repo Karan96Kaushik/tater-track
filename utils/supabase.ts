@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import { normalizeSupabaseUrl } from '@/lib/supabase/url';
 import type { Database } from '@/lib/supabase/types';
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const url = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL_TATER);
+const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY_TATER;
 
 if (!url || !publishableKey) {
   // Surfaced loudly in dev; the app renders a config banner instead of crashing.
-  console.warn('[tater-track] VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY are not set.');
+  console.warn('[tater-track] VITE_SUPABASE_URL_TATER / VITE_SUPABASE_PUBLISHABLE_KEY_TATER are not set.');
 }
 
 export const isSupabaseConfigured = Boolean(url && publishableKey);
