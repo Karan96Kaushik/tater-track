@@ -1,6 +1,6 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
-import { supabaseAdmin } from '../_shared/supabaseAdmin.js';
+import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb } from '../_shared/tmdb.js';
 import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
 
@@ -23,7 +23,7 @@ export const handler = withHttp(async (event) => {
     throw new HttpError(400, 'tmdbId and mediaType ("movie" | "tv") are required');
   }
 
-  const db = supabaseAdmin();
+  const db = supabaseUser();
   const { data: tracked } = await db
     .from('tracked_media')
     .select('*')

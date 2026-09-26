@@ -14,8 +14,8 @@ export const env = {
   get supabaseUrl() {
     return normalizeSupabaseUrl(requireEnv('VITE_SUPABASE_URL_TATER')) ?? '';
   },
-  get supabaseSecretKey() {
-    return requireEnv('VITE_SUPABASE_SECRET_KEY_TATER');
+  get supabasePublishableKey() {
+    return requireEnv('VITE_SUPABASE_PUBLISHABLE_KEY_TATER');
   },
   get tmdbAccessToken() {
     return requireEnv('TMDB_ACCESS_TOKEN');

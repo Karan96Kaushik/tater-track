@@ -12,6 +12,8 @@ if (!url || !publishableKey) {
 
 export const isSupabaseConfigured = Boolean(url && publishableKey);
 
+const projectRef = url ? new URL(url).hostname.split('.')[0] : 'local';
+
 export const supabase = createClient<Database>(
   url ?? 'http://localhost:54321',
   publishableKey ?? 'public-anon-key',
@@ -20,7 +22,8 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storageKey: 'tater_track_supabase_auth',
+      // Scoped to the project so a session from another Supabase project is not reused.
+      storageKey: `tater_track_${projectRef}_auth`,
     },
   },
 );

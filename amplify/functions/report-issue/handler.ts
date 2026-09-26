@@ -1,6 +1,6 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
-import { supabaseAdmin } from '../_shared/supabaseAdmin.js';
+import { supabaseUser } from '../_shared/supabaseUser.js';
 import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
 
 interface ReportRequest {
@@ -18,7 +18,7 @@ export const handler = withHttp(async (event) => {
   if (!trimmed) throw new HttpError(400, 'message is required');
   if (trimmed.length > 5000) throw new HttpError(400, 'message is too long');
 
-  const { error } = await supabaseAdmin().from('issue_reports').insert({
+  const { error } = await supabaseUser().from('issue_reports').insert({
     user_id: user.id,
     email: user.email,
     category: category ?? 'general',

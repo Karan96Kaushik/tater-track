@@ -1,6 +1,6 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
-import { supabaseAdmin } from '../_shared/supabaseAdmin.js';
+import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb } from '../_shared/tmdb.js';
 import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
 
@@ -37,7 +37,7 @@ function requireMedia(body: TrackRequest): { tmdbId: number; mediaType: MediaTyp
 
 /** Recomputes the denormalised episode counters after any episode mutation. */
 async function syncShowProgress(userId: string, tmdbShowId: number): Promise<number> {
-  const db = supabaseAdmin();
+  const db = supabaseUser();
   const { count } = await db
     .from('watched_episodes')
     .select('*', { count: 'exact', head: true })
@@ -84,7 +84,7 @@ export const handler = withHttp(async (event) => {
 
   const body = parseBody<TrackRequest>(event);
   const action = body.action ?? 'list';
-  const db = supabaseAdmin();
+  const db = supabaseUser();
 
   switch (action) {
     case 'list': {

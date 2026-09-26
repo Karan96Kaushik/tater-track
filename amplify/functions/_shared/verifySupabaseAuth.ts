@@ -1,6 +1,7 @@
 import type { LambdaFunctionURLEvent } from 'aws-lambda';
 import { HttpError } from './http.js';
-import { supabaseAdmin } from './supabaseAdmin.js';
+import { env } from './secrets.js';
+import { bindSupabaseUser, clearSupabaseUser } from './supabaseUser.js';
 
 export interface AuthedUser {
   id: string;
@@ -17,27 +18,29 @@ function bearerToken(event: LambdaFunctionURLEvent): string {
   return token;
 }
 
-function assertSupabaseSecret(): void {
-  const key = process.env.VITE_SUPABASE_SECRET_KEY_TATER ?? '';
-  // Amplify leaves this placeholder until `ampx sandbox secret set` writes SSM.
-  if (!key.startsWith('eyJ') && !key.startsWith('sb_secret_')) {
-    throw new HttpError(
-      500,
-      'Supabase secret is not set on the function. Run `npx ampx sandbox secret set VITE_SUPABASE_SECRET_KEY_TATER` with the service_role or sb_secret key.',
-    );
-  }
-}
-
 /** Function URL auth type is NONE, so the Supabase JWT is the only gate. */
 export async function verifySupabaseAuth(
   event: LambdaFunctionURLEvent,
 ): Promise<AuthedUser> {
-  assertSupabaseSecret();
+  clearSupabaseUser();
   const token = bearerToken(event);
-  const { data, error } = await supabaseAdmin().auth.getUser(token);
-  if (error || !data.user) {
-    console.error('supabase auth.getUser failed', error?.message ?? 'no user');
+
+  const response = await fetch(`${env.supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: env.supabasePublishableKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { msg?: string; message?: string } | null;
+    console.error('supabase auth user lookup failed', response.status, body?.msg ?? body?.message);
     throw new HttpError(401, 'Invalid or expired session');
   }
-  return { id: data.user.id, email: data.user.email ?? null };
+
+  const user = (await response.json()) as { id?: string; email?: string | null };
+  if (!user.id) throw new HttpError(401, 'Invalid or expired session');
+
+  bindSupabaseUser(token);
+  return { id: user.id, email: user.email ?? null };
 }

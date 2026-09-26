@@ -72,7 +72,7 @@ Local/dev scripts: `vite`, `amplify:sandbox` (`npx ampx sandbox`), Amplify secre
 - Client: `utils/supabase.ts` (`createClient`, session persist key `cinderblock_supabase_auth`).
 - Env: `VITE_SUPABASE_URL_TATER` (project origin only), `VITE_SUPABASE_PUBLISHABLE_KEY_TATER`.
 - Tables (see `supabase/schema.sql` + migrations): `user_settings`, `user_active_plan`, `user_backups`, `user_training_logs`, `ai_chat_reports`, `user_program_versions`.
-- RLS: row access keyed to `auth.users`; Lambdas use the service-role key after verifying the caller JWT.
+- RLS: row access keyed to `auth.users`. Lambdas use the publishable key plus the caller's JWT, so the same policies apply.
 
 ### Browser → Amplify Function URLs
 
@@ -86,10 +86,10 @@ Local/dev scripts: `vite`, `amplify:sandbox` (`npx ampx sandbox`), Amplify secre
 | `ai-chat` | Streaming (`InvokeMode.RESPONSE_STREAM`), Cerebras |
 | `ai-extract-json` | Cerebras |
 | `ai-scope-judge` | Cerebras |
-| `report-issue` | Writes via service-role client |
+| `report-issue` | Inserts as the authenticated user |
 | `amplify-test` | Smoke / server-side Supabase |
 
-Secrets (Amplify SSM, not Vite): `VITE_SUPABASE_SECRET_KEY_TATER`, `CEREBRAS_API_KEY`. `VITE_SUPABASE_URL_TATER` is baked at synthesize time. Optional `CEREBRAS_MODEL`.
+Secrets (Amplify SSM, not Vite): `TMDB_ACCESS_TOKEN`, `CEREBRAS_API_KEY`. `VITE_SUPABASE_URL_TATER` and `VITE_SUPABASE_PUBLISHABLE_KEY_TATER` are baked at synthesize time. Optional `CEREBRAS_MODEL`.
 
 ### Lambdas → Cerebras
 

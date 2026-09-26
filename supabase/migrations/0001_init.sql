@@ -1,7 +1,7 @@
 -- 0001_init: initial tater-track schema (mirrors supabase/schema.sql)
 -- tater-track schema
 -- Auth is Supabase only. Every user-facing table is keyed to auth.users and guarded by RLS.
--- Lambdas use the service-role key *after* verifying the caller's JWT.
+-- Lambdas use the publishable key and the caller's JWT, so these policies apply.
 
 create extension if not exists "pgcrypto";
 
@@ -125,7 +125,7 @@ create index if not exists user_backups_user_idx
   on public.user_backups (user_id, created_at desc);
 
 -- ---------------------------------------------------------------------------
--- issue_reports: written by the report-issue Lambda with the service-role key
+-- issue_reports: filed by the signed-in user through the report-issue Lambda
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.issue_reports (
@@ -139,7 +139,8 @@ create table if not exists public.issue_reports (
 );
 
 -- ---------------------------------------------------------------------------
--- tmdb_cache: shared response cache, service-role only (no user rows)
+-- tmdb_cache: shared response cache. No policies, so the publishable-key client
+-- cannot read or write it. Lambdas call TMDB directly.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.tmdb_cache (
@@ -209,8 +210,8 @@ begin
   end loop;
 end $$;
 
--- Users may file their own reports and read them back; the Lambda writes with
--- the service-role key, which bypasses RLS.
+-- Users may file their own reports and read them back. The Lambda inserts with
+-- the caller's JWT, so auth.uid() must match user_id.
 drop policy if exists issue_reports_owner_rw on public.issue_reports;
 create policy issue_reports_owner_rw on public.issue_reports
   for all
@@ -218,4 +219,4 @@ create policy issue_reports_owner_rw on public.issue_reports
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- tmdb_cache intentionally has RLS enabled and no policies: service-role only.
+-- tmdb_cache has RLS enabled and no policies. The publishable key cannot use it.

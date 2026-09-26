@@ -8,6 +8,6 @@ export const trackMedia = defineFunction({
   environment: {
     TMDB_ACCESS_TOKEN: secret('TMDB_ACCESS_TOKEN'),
     VITE_SUPABASE_URL_TATER: process.env.VITE_SUPABASE_URL_TATER ?? '',
-    VITE_SUPABASE_SECRET_KEY_TATER: secret('VITE_SUPABASE_SECRET_KEY_TATER'),
+    VITE_SUPABASE_PUBLISHABLE_KEY_TATER: process.env.VITE_SUPABASE_PUBLISHABLE_KEY_TATER ?? '',
   },
 });

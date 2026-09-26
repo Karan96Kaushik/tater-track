@@ -1,6 +1,6 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
-import { supabaseAdmin } from '../_shared/supabaseAdmin.js';
+import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb, type TmdbEpisode } from '../_shared/tmdb.js';
 import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
 
@@ -47,7 +47,7 @@ async function mapWithConcurrency<T, R>(
 }
 
 async function listUpcoming(userId: string, windowDays: number) {
-  const { data, error } = await supabaseAdmin()
+  const { data, error } = await supabaseUser()
     .from('upcoming_episodes')
     .select('*')
     .eq('user_id', userId)
@@ -63,7 +63,7 @@ export const handler = withHttp(async (event) => {
   const user = await verifySupabaseAuth(event);
   const body = parseBody<UpcomingRequest>(event);
   const action = body.action ?? 'list';
-  const db = supabaseAdmin();
+  const db = supabaseUser();
 
   const { data: settings } = await db
     .from('user_settings')
