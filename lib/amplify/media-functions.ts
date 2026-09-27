@@ -12,9 +12,25 @@ export interface SearchHit {
   voteAverage: number | null;
 }
 
+export type BrowseKind =
+  | 'trending'
+  | 'popular'
+  | 'top_rated'
+  | 'now_playing'
+  | 'upcoming'
+  | 'on_the_air'
+  | 'genre'
+  | 'similar';
+
+export interface Genre {
+  id: number;
+  name: string;
+}
+
 export interface SearchResponse {
   query: string;
   trending: boolean;
+  browse?: BrowseKind;
   page: number;
   totalPages: number;
   results: SearchHit[];
@@ -65,6 +81,18 @@ export const mediaApi = {
   search: (params: { query: string; mediaType?: MediaType | 'multi'; page?: number }) =>
     callFunction<SearchResponse>('tmdbSearchUrl', params, { auth: 'optional' }),
 
+  browse: (params: {
+    browse: BrowseKind;
+    mediaType?: MediaType | 'multi';
+    page?: number;
+    genreId?: number;
+    tmdbId?: number;
+    region?: string;
+  }) => callFunction<SearchResponse>('tmdbSearchUrl', params, { auth: 'optional' }),
+
+  genres: (mediaType: MediaType) =>
+    callFunction<{ genres: Genre[] }>('tmdbSearchUrl', { browse: 'genres', mediaType }, { auth: 'optional' }),
+
   details: (params: {
     tmdbId: number;
     mediaType: MediaType;
@@ -87,27 +115,6 @@ export const mediaApi = {
 
   rate: (params: { tmdbId: number; mediaType: MediaType; rating: number | null }) =>
     callFunction<{ item: TrackedMedia }>('trackMediaUrl', { action: 'rate', ...params }),
-
-  setEpisodeWatched: (params: {
-    tmdbId: number;
-    seasonNumber: number;
-    episodeNumber: number;
-    watched: boolean;
-    /** When marking watched, also log these episodes in the same request. */
-    episodeNumbers?: number[];
-  }) =>
-    callFunction<{ watchedEpisodeCount: number }>('trackMediaUrl', {
-      action: 'setEpisodeWatched',
-      mediaType: 'tv',
-      ...params,
-    }),
-
-  setSeasonWatched: (params: { tmdbId: number; seasonNumber: number; watched: boolean }) =>
-    callFunction<{ watchedEpisodeCount: number }>('trackMediaUrl', {
-      action: 'setSeasonWatched',
-      mediaType: 'tv',
-      ...params,
-    }),
 
   setShowWatched: (params: { tmdbId: number }) =>
     callFunction<{ watchedEpisodeCount: number; marked: number }>('trackMediaUrl', {

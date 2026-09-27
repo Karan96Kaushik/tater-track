@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { CalendarClock, Star, Trash2 } from 'lucide-react';
+import { CalendarClock, Sparkles, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,8 +13,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SeasonEpisodes } from '@/components/media/SeasonEpisodes';
-import { mediaApi, type MediaDetails } from '@/lib/amplify/media-functions';
+import { mediaApi, type EpisodeDetail, type MediaDetails } from '@/lib/amplify/media-functions';
 import type { MediaType, TrackStatus } from '@/lib/supabase/types';
+import { setEpisodesWatched as saveEpisodesWatched, setSeasonWatched } from '@/lib/supabase/watch-progress';
 import { useAuth } from '@/hooks/useAuth';
 import { useLibrary } from '@/hooks/useLibrary';
 import { formatDate, posterUrl, relativeAirDate } from '@/lib/utils';
@@ -22,6 +23,14 @@ import { formatDate, posterUrl, relativeAirDate } from '@/lib/utils';
 interface MediaDetailDialogProps {
   target: { tmdbId: number; mediaType: MediaType } | null;
   onOpenChange: (open: boolean) => void;
+}
+
+function markFrom(episode: EpisodeDetail) {
+  return {
+    episodeNumber: episode.episodeNumber,
+    name: episode.name,
+    airDate: episode.airDate,
+  };
 }
 
 const STATUS_ACTIONS: Array<{ status: TrackStatus; label: string }> = [
@@ -32,9 +41,10 @@ const STATUS_ACTIONS: Array<{ status: TrackStatus; label: string }> = [
 ];
 
 export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canTrack = Boolean(user);
-  const { entryFor, track, untrack, rate, refresh } = useLibrary();
+  const { entryFor, track, untrack, rate, refresh, applyItem } = useLibrary();
   const [details, setDetails] = useState<MediaDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [season, setSeason] = useState<number | null>(null);
@@ -73,37 +83,63 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
     if (target) void load();
   }, [target, load]);
 
+  function showSnapshot(current: MediaDetails) {
+    return {
+      tmdbId: current.tmdbId,
+      title: current.title,
+      posterPath: current.posterPath,
+      backdropPath: current.backdropPath,
+      releaseDate: current.releaseDate,
+      totalEpisodes: current.numberOfEpisodes ?? null,
+    };
+  }
+
+  function paintEpisodes(seasonNumber: number, episodeNumbers: number[], watched: boolean) {
+    const marked = new Set(episodeNumbers);
+    setDetails((current) =>
+      current
+        ? {
+            ...current,
+            episodes: current.episodes?.map((episode) =>
+              episode.seasonNumber === seasonNumber && marked.has(episode.episodeNumber)
+                ? { ...episode, watched }
+                : episode,
+            ),
+          }
+        : current,
+    );
+  }
+
   async function setEpisodesWatched(seasonNumber: number, episodeNumbers: number[], watched: boolean) {
-    if (!target || episodeNumbers.length === 0) return;
+    if (!target || !user || !details || episodeNumbers.length === 0) return;
+    const marked = new Set(episodeNumbers);
+    const episodes = (details.episodes ?? []).filter(
+      (episode) => episode.seasonNumber === seasonNumber && marked.has(episode.episodeNumber),
+    );
+    if (episodes.length !== episodeNumbers.length) return;
+
+    const previousEpisodes = details.episodes;
     setPendingEpisode(`${seasonNumber}:${episodeNumbers[episodeNumbers.length - 1]}`);
+    paintEpisodes(seasonNumber, episodeNumbers, watched);
     try {
-      await mediaApi.setEpisodeWatched({
-        tmdbId: target.tmdbId,
+      const item = await saveEpisodesWatched({
+        userId: user.id,
+        show: showSnapshot(details),
         seasonNumber,
-        episodeNumber: episodeNumbers[episodeNumbers.length - 1],
-        episodeNumbers: watched ? episodeNumbers : undefined,
+        episodes: episodes.map(markFrom),
         watched,
+        tracked: tracked
+          ? { status: tracked.status, totalEpisodes: tracked.total_episodes }
+          : null,
       });
-      const marked = new Set(episodeNumbers);
-      setDetails((current) =>
-        current
-          ? {
-              ...current,
-              episodes: current.episodes?.map((episode) =>
-                episode.seasonNumber === seasonNumber && marked.has(episode.episodeNumber)
-                  ? { ...episode, watched }
-                  : episode,
-              ),
-            }
-          : current,
-      );
-      await refresh();
+      applyItem(item);
       if (watched && !tracked) {
         toast.success('Added to your library');
       } else if (watched && episodeNumbers.length > 1) {
         toast.success(`Marked ${episodeNumbers.length} episodes as watched`);
       }
     } catch (cause) {
+      setDetails((current) => (current ? { ...current, episodes: previousEpisodes } : current));
       toast.error('Could not update progress', { description: (cause as Error).message });
       throw cause;
     } finally {
@@ -112,15 +148,41 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
   }
 
   async function markSeason(watched: boolean) {
-    if (!target || season === null) return;
+    if (!target || !user || !details || season === null) return;
+    const seasonEpisodes = (details.episodes ?? []).filter((episode) => episode.seasonNumber === season);
+    if (watched && (loading || seasonEpisodes.length === 0)) {
+      toast.error('Wait for this season to finish loading');
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const affected = watched
+      ? seasonEpisodes.filter((episode) => episode.airDate && episode.airDate <= today)
+      : seasonEpisodes;
+    const previousEpisodes = details.episodes;
     setPendingBulk(true);
+    paintEpisodes(
+      season,
+      affected.map((episode) => episode.episodeNumber),
+      watched,
+    );
     try {
-      await mediaApi.setSeasonWatched({ tmdbId: target.tmdbId, seasonNumber: season, watched });
-      await Promise.all([load(season), refresh()]);
+      const item = await setSeasonWatched({
+        userId: user.id,
+        show: showSnapshot(details),
+        seasonNumber: season,
+        episodes: seasonEpisodes.map(markFrom),
+        watched,
+        tracked: tracked
+          ? { status: tracked.status, totalEpisodes: tracked.total_episodes }
+          : null,
+      });
+      if (item) applyItem(item);
       toast.success(
         watched && !tracked ? 'Added to your library' : watched ? 'Season marked as watched' : 'Season cleared',
       );
     } catch (cause) {
+      setDetails((current) => (current ? { ...current, episodes: previousEpisodes } : current));
       toast.error('Could not update the season', { description: (cause as Error).message });
     } finally {
       setPendingBulk(false);
@@ -196,6 +258,29 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (!target) return;
+                  onOpenChange(false);
+                  navigate('/discover', {
+                    state: {
+                      similar: {
+                        tmdbId: target.tmdbId,
+                        mediaType: target.mediaType,
+                        title: details.title,
+                        at: Date.now(),
+                      },
+                    },
+                  });
+                }}
+              >
+                <Sparkles className="size-4" /> Find similar
+              </Button>
             </div>
 
             {canTrack ? (

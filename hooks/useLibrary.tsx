@@ -18,6 +18,8 @@ interface LibraryContextValue {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /** Puts a row written directly to Supabase into the in-memory library. */
+  applyItem: (item: TrackedMedia) => void;
   entryFor: (tmdbId: number, mediaType: MediaType) => TrackedMedia | undefined;
   track: (params: { tmdbId: number; mediaType: MediaType; status: TrackStatus; title?: string }) => Promise<void>;
   untrack: (params: { tmdbId: number; mediaType: MediaType }) => Promise<void>;
@@ -67,6 +69,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       refresh,
+      applyItem: (item) => {
+        setItems((current) => {
+          const rest = current.filter(
+            (entry) => !(entry.tmdb_id === item.tmdb_id && entry.media_type === item.media_type),
+          );
+          return [item, ...rest];
+        });
+      },
       entryFor: (tmdbId, mediaType) =>
         items.find((item) => item.tmdb_id === tmdbId && item.media_type === mediaType),
 

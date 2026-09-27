@@ -49,6 +49,13 @@ export interface TmdbShowDetails {
   }>;
 }
 
+export interface TmdbPage {
+  page: number;
+  total_pages: number;
+  total_results?: number;
+  results: TmdbSearchResult[];
+}
+
 export interface TmdbMovieDetails {
   id: number;
   title: string;
@@ -184,6 +191,38 @@ export const tmdb = {
 
   trending: (mediaType: 'movie' | 'tv' | 'all', window: 'day' | 'week' = 'week') =>
     tmdbFetch<{ results: TmdbSearchResult[] }>(`/trending/${mediaType}/${window}`),
+
+  /** Curated lists: popular, top rated, now playing, upcoming, on the air. */
+  catalog: (
+    mediaType: 'movie' | 'tv',
+    list: 'popular' | 'top_rated' | 'now_playing' | 'upcoming' | 'on_the_air',
+    page = 1,
+    region?: string,
+  ) =>
+    tmdbFetch<TmdbPage>(`/${mediaType}/${list}`, {
+      page,
+      include_adult: false,
+      region,
+    }),
+
+  discoverGenre: (mediaType: 'movie' | 'tv', genreId: number, page = 1) =>
+    tmdbFetch<TmdbPage>(`/discover/${mediaType}`, {
+      page,
+      with_genres: genreId,
+      sort_by: 'popularity.desc',
+      include_adult: false,
+      'vote_count.gte': 50,
+    }),
+
+  similar: (mediaType: 'movie' | 'tv', id: number, page = 1) =>
+    tmdbFetch<TmdbPage>(`/${mediaType}/${id}/similar`, { page, include_adult: false }),
+
+  genres: (mediaType: 'movie' | 'tv') =>
+    cached(
+      `genres:${mediaType}`,
+      () => 7 * DAY,
+      () => tmdbFetch<{ genres: Array<{ id: number; name: string }> }>(`/genre/${mediaType}/list`),
+    ),
 
   movie: (id: number, options?: CacheOptions) =>
     cached(

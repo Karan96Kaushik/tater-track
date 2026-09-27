@@ -183,7 +183,7 @@ export function SeasonEpisodes({
           <Button
             size="sm"
             variant="outline"
-            disabled={saving || season === null}
+            disabled={saving || loading || season === null}
             onClick={() => {
               setCatchUp(null);
               onMarkSeason(true);
