@@ -28,10 +28,12 @@ export function StatsRow({ items }: { items: TrackedMedia[] }) {
       {stats.map(({ label, value, icon: Icon }) => (
         <Card key={label}>
           <CardContent className="flex items-center gap-3 p-4">
-            <Icon className="size-5 text-muted-foreground" />
-            <div>
-              <div className="text-xl font-semibold leading-none">{value}</div>
-              <div className="text-xs text-muted-foreground">{label}</div>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/20">
+              <Icon className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="font-display text-2xl font-medium leading-none tabular-nums">{value}</div>
+              <div className="mt-1 truncate text-xs text-muted-foreground">{label}</div>
             </div>
           </CardContent>
         </Card>

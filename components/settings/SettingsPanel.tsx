@@ -47,6 +47,10 @@ export function SettingsPanel() {
 
   return (
     <div className="max-w-2xl space-y-4">
+      <div className="pb-2">
+        <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">Account</p>
+        <h1 className="font-display mt-1 text-3xl font-medium tracking-tight">Settings</h1>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Preferences</CardTitle>
@@ -145,7 +149,7 @@ export function SettingsPanel() {
               onChange={(event) => setIssue(event.target.value)}
               rows={4}
               placeholder="What went wrong?"
-              className="w-full rounded-md border border-border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-xl border border-border bg-card/60 p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
             />
             <Button type="submit" size="sm" disabled={!issue.trim()}>
               Send

@@ -27,18 +27,19 @@ export function UpcomingView() {
   const groups = useMemo(() => groupByDate(items), [items]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-lg font-semibold">Upcoming episodes</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">Schedule</p>
+          <h1 className="font-display mt-1 text-3xl font-medium tracking-tight">Upcoming episodes</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Next {windowDays ?? 30} days for shows you are watching or have finished.
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="ml-auto"
+          className="rounded-full sm:ml-auto"
           disabled={refreshing}
           onClick={() => void refreshFromTmdb()}
         >
@@ -56,10 +57,13 @@ export function UpcomingView() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border py-16 text-center">
-          <CalendarClock className="mx-auto mb-3 size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No episodes scheduled. Hit refresh to pull the latest air dates from TMDB.
+        <div className="flex flex-col items-center rounded-3xl border border-dashed border-border bg-card/40 px-6 py-20 text-center">
+          <span className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/12 text-primary ring-1 ring-primary/20">
+            <CalendarClock className="size-5" />
+          </span>
+          <p className="font-display text-xl font-medium">Nothing scheduled</p>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            No episodes in this window. Refresh to pull the latest air dates from TMDB.
           </p>
         </div>
       ) : (
@@ -67,7 +71,7 @@ export function UpcomingView() {
           {groups.map(([date, episodes]) => (
             <section key={date} className="space-y-2">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-medium">{formatDate(date)}</h2>
+                <h2 className="font-display text-lg font-medium tracking-tight">{formatDate(date)}</h2>
                 <Badge variant="outline">{relativeAirDate(date)}</Badge>
               </div>
 
@@ -82,19 +86,19 @@ export function UpcomingView() {
                         onClick={() =>
                           setSelected({ tmdbId: episode.tmdb_show_id, mediaType: 'tv' })
                         }
-                        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary/60"
+                        className="flex w-full items-center gap-4 rounded-2xl bg-card/70 p-2.5 text-left ring-1 ring-border transition duration-200 hover:-translate-y-0.5 hover:bg-card hover:ring-primary/40"
                       >
                         {image ? (
                           <img
                             src={image}
                             alt={episode.show_name}
                             loading="lazy"
-                            className="h-16 w-28 shrink-0 rounded-md object-cover"
+                            className="h-[4.5rem] w-32 shrink-0 rounded-xl object-cover"
                           />
                         ) : (
-                          <div className="h-16 w-28 shrink-0 rounded-md bg-muted" />
+                          <div className="h-[4.5rem] w-32 shrink-0 rounded-xl bg-muted" />
                         )}
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 pr-2">
                           <div className="truncate text-sm font-medium">{episode.show_name}</div>
                           <div className="truncate text-xs text-muted-foreground">
                             S{episode.season_number}E{episode.episode_number}

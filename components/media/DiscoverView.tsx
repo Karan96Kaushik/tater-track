@@ -49,15 +49,20 @@ export function DiscoverView() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-primary">Discover</p>
+        <h1 className="font-display mt-1 text-3xl font-medium tracking-tight">Find something to watch</h1>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search movies and TV shows"
-            className="pl-9"
+            className="h-12 rounded-2xl pl-11"
           />
         </div>
         <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
@@ -70,13 +75,13 @@ export function DiscoverView() {
       </div>
 
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">{heading}</h2>
+        <h2 className="font-display text-xl font-medium tracking-tight">{heading}</h2>
         {loading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {loading && results.length === 0
           ? Array.from({ length: 12 }).map((_, index) => (
               <Skeleton key={index} className="aspect-[2/3] w-full rounded-lg" />
@@ -98,7 +103,7 @@ export function DiscoverView() {
       </div>
 
       {!loading && results.length === 0 && !error && (
-        <p className="py-12 text-center text-sm text-muted-foreground">Nothing found.</p>
+        <p className="py-16 text-center font-display text-lg text-muted-foreground">Nothing found.</p>
       )}
 
       <MediaDetailDialog target={selected} onOpenChange={(open) => !open && setSelected(null)} />

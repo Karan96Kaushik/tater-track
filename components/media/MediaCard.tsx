@@ -49,18 +49,15 @@ export function MediaCard({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        'group flex w-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-colors hover:border-primary/60',
-        className,
-      )}
+      className={cn('group flex w-full flex-col text-left', className)}
     >
-      <div className="relative aspect-[2/3] w-full bg-muted">
+      <div className="relative aspect-[2/3] w-full overflow-hidden rounded-2xl bg-muted shadow-lg shadow-black/25 ring-1 ring-border transition duration-300 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:ring-primary/50">
         {poster ? (
           <img
             src={poster}
             alt={title}
             loading="lazy"
-            className="size-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            className="size-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex size-full items-center justify-center text-muted-foreground">
@@ -69,19 +66,19 @@ export function MediaCard({
         )}
 
         {status && (
-          <Badge variant={STATUS_VARIANT[status]} className="absolute left-2 top-2">
+          <Badge variant={STATUS_VARIANT[status]} className="absolute left-2 top-2 shadow-sm backdrop-blur-md">
             {STATUS_LABEL[status]}
           </Badge>
         )}
 
         {percent !== null && (
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/55">
             <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
           </div>
         )}
       </div>
 
-      <div className="flex flex-col gap-0.5 p-2">
+      <div className="flex flex-col gap-0.5 px-0.5 pt-2.5">
         <span className="line-clamp-2 text-sm font-medium leading-tight">{title}</span>
         <span className="text-xs text-muted-foreground">
           {mediaType === 'tv' ? 'TV' : 'Movie'}

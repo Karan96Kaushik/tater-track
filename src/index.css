@@ -3,44 +3,46 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.2 0.01 264);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 264);
-  --primary: oklch(0.62 0.19 42);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.005 264);
-  --secondary-foreground: oklch(0.25 0.01 264);
-  --muted: oklch(0.96 0.005 264);
-  --muted-foreground: oklch(0.55 0.01 264);
-  --accent: oklch(0.95 0.01 264);
-  --accent-foreground: oklch(0.25 0.01 264);
+  --background: oklch(0.985 0.006 80);
+  --foreground: oklch(0.22 0.02 50);
+  --card: oklch(1 0.002 80);
+  --card-foreground: oklch(0.22 0.02 50);
+  --primary: oklch(0.62 0.16 55);
+  --primary-foreground: oklch(0.99 0.01 90);
+  --secondary: oklch(0.95 0.01 80);
+  --secondary-foreground: oklch(0.28 0.02 50);
+  --muted: oklch(0.95 0.008 80);
+  --muted-foreground: oklch(0.48 0.02 55);
+  --accent: oklch(0.94 0.015 75);
+  --accent-foreground: oklch(0.28 0.02 50);
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.92 0.005 264);
-  --ring: oklch(0.62 0.19 42);
+  --border: oklch(0.22 0.02 50 / 10%);
+  --ring: oklch(0.62 0.16 55);
 }
 
 .dark {
-  --background: oklch(0.17 0.01 264);
-  --foreground: oklch(0.96 0.003 264);
-  --card: oklch(0.21 0.012 264);
-  --card-foreground: oklch(0.96 0.003 264);
-  --primary: oklch(0.72 0.17 55);
-  --primary-foreground: oklch(0.18 0.01 264);
-  --secondary: oklch(0.27 0.012 264);
-  --secondary-foreground: oklch(0.96 0.003 264);
-  --muted: oklch(0.27 0.012 264);
-  --muted-foreground: oklch(0.68 0.01 264);
-  --accent: oklch(0.3 0.015 264);
-  --accent-foreground: oklch(0.96 0.003 264);
-  --destructive: oklch(0.62 0.21 25);
+  --background: oklch(0.155 0.012 55);
+  --foreground: oklch(0.97 0.008 85);
+  --card: oklch(0.205 0.014 55);
+  --card-foreground: oklch(0.97 0.008 85);
+  --primary: oklch(0.8 0.14 78);
+  --primary-foreground: oklch(0.22 0.04 60);
+  --secondary: oklch(0.26 0.012 55);
+  --secondary-foreground: oklch(0.96 0.008 85);
+  --muted: oklch(0.24 0.012 55);
+  --muted-foreground: oklch(0.74 0.02 75);
+  --accent: oklch(0.28 0.016 55);
+  --accent-foreground: oklch(0.97 0.008 85);
+  --destructive: oklch(0.66 0.19 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.3 0.012 264);
-  --ring: oklch(0.72 0.17 55);
+  --border: oklch(1 0 0 / 10%);
+  --ring: oklch(0.8 0.14 78);
 }
 
 @theme inline {
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -72,8 +74,16 @@
 
   body {
     background-color: var(--background);
+    background-image:
+      radial-gradient(ellipse 90% 50% at 0% -10%, oklch(0.62 0.14 55 / 0.16), transparent 55%),
+      radial-gradient(ellipse 70% 40% at 100% 0%, oklch(0.55 0.1 30 / 0.1), transparent 50%);
+    background-attachment: fixed;
     color: var(--foreground);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  ::selection {
+    background: oklch(0.8 0.14 78 / 0.35);
   }
 }

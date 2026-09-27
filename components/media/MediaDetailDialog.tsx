@@ -145,7 +145,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                 <img
                   src={poster}
                   alt={details.title}
-                  className="hidden h-48 w-32 shrink-0 rounded-md object-cover sm:block"
+                  className="hidden h-52 w-36 shrink-0 rounded-2xl object-cover ring-1 ring-border sm:block"
                 />
               )}
               <div className="space-y-3">
@@ -248,7 +248,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                   <select
                     value={season ?? ''}
                     onChange={(event) => setSeason(Number(event.target.value))}
-                    className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+                    className="h-9 rounded-xl border border-border bg-card px-3 text-sm"
                   >
                     {details.seasons.map((entry) => (
                       <option key={entry.seasonNumber} value={entry.seasonNumber}>
@@ -277,7 +277,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                     );
                     return (
                       <li key={key}>
-                        <label className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
+                        <label className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted/70">
                           {canTrack && (
                             <input
                               type="checkbox"

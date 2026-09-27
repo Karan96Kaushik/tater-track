@@ -48,11 +48,14 @@ export function ResetPassword() {
   const failureMessage = exchangeError ?? callback.message;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden p-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.55_0.14_60/0.28),transparent_55%)]" />
+      <Card className="relative w-full max-w-sm border-border shadow-2xl shadow-black/30">
         <CardHeader className="items-center text-center">
-          <Popcorn className="mb-2 size-8 text-primary" />
-          <CardTitle className="text-xl">Choose a new password</CardTitle>
+          <span className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/25">
+            <Popcorn className="size-6" />
+          </span>
+          <CardTitle className="font-display text-2xl font-medium tracking-tight">Choose a new password</CardTitle>
           <CardDescription>
             {canChoosePassword
               ? 'Use at least 8 characters.'
