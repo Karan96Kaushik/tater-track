@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { EpisodeDetail, SeasonSummary } from '@/lib/amplify/media-functions';
 import { cn, formatDate, relativeAirDate } from '@/lib/utils';
@@ -55,14 +55,26 @@ export function SeasonEpisodes({
   onUnwatch,
 }: SeasonEpisodesProps) {
   const [catchUp, setCatchUp] = useState<CatchUp | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const list = episodes ?? [];
+  const seasonIndex = seasons.findIndex((entry) => entry.seasonNumber === season);
+  const previousSeason = seasonIndex > 0 ? seasons[seasonIndex - 1] : null;
+  const nextSeason =
+    seasonIndex >= 0 && seasonIndex < seasons.length - 1 ? seasons[seasonIndex + 1] : null;
   const watchedCount = list.filter((episode) => episode.watched).length;
   const progress = list.length > 0 ? Math.round((watchedCount / list.length) * 100) : 0;
   const upNext = list.find((episode) => !episode.watched && airedAlready(episode.airDate));
 
   useEffect(() => {
     setCatchUp(null);
+    listRef.current?.scrollTo({ top: 0 });
   }, [season]);
+
+  function goToSeason(seasonNumber: number) {
+    if (saving) return;
+    setCatchUp(null);
+    onSeasonChange(seasonNumber);
+  }
 
   useEffect(() => {
     if (!catchUp) return;
@@ -107,10 +119,22 @@ export function SeasonEpisodes({
 
   return (
     <div className="space-y-3 border-t border-border pt-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="shrink-0 px-2"
+          disabled={!previousSeason || saving}
+          aria-label={previousSeason ? `Previous season, ${previousSeason.name}` : 'Previous season'}
+          onClick={() => previousSeason && goToSeason(previousSeason.seasonNumber)}
+        >
+          <ChevronLeft />
+          <span className="hidden sm:inline">Prev</span>
+        </Button>
         <select
           value={season ?? ''}
-          onChange={(event) => onSeasonChange(Number(event.target.value))}
+          onChange={(event) => goToSeason(Number(event.target.value))}
           className="h-9 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-sm"
         >
           {seasons.map((entry) => (
@@ -119,6 +143,18 @@ export function SeasonEpisodes({
             </option>
           ))}
         </select>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="shrink-0 px-2"
+          disabled={!nextSeason || saving}
+          aria-label={nextSeason ? `Next season, ${nextSeason.name}` : 'Next season'}
+          onClick={() => nextSeason && goToSeason(nextSeason.seasonNumber)}
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight />
+        </Button>
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {list.length > 0 ? `${watchedCount} of ${list.length}` : '—'}
         </span>
@@ -156,7 +192,7 @@ export function SeasonEpisodes({
         </div>
       )}
 
-      <div className="max-h-80 space-y-1 overflow-y-auto pr-1">
+      <div ref={listRef} className="max-h-80 space-y-1 overflow-y-auto pr-1">
         {catchUp && (
           <div className="sticky top-0 z-10 mb-2 rounded-2xl bg-card p-3 shadow-lg shadow-black/20 ring-1 ring-primary/30">
             <p className="text-sm font-medium">Mark earlier episodes?</p>
@@ -228,6 +264,33 @@ export function SeasonEpisodes({
             );
           })}
         </ul>
+
+        {seasons.length > 1 && (
+          <div className="mt-2 grid grid-cols-2 gap-2 pt-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="justify-start px-2"
+              disabled={!previousSeason || saving}
+              onClick={() => previousSeason && goToSeason(previousSeason.seasonNumber)}
+            >
+              <ChevronLeft />
+              <span className="truncate">{previousSeason?.name ?? 'Previous season'}</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="justify-end px-2"
+              disabled={!nextSeason || saving}
+              onClick={() => nextSeason && goToSeason(nextSeason.seasonNumber)}
+            >
+              <span className="truncate">{nextSeason?.name ?? 'Next season'}</span>
+              <ChevronRight />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

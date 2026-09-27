@@ -138,8 +138,9 @@ create table if not exists public.issue_reports (
 );
 
 -- ---------------------------------------------------------------------------
--- tmdb_cache: shared response cache. No policies, so the publishable-key client
--- cannot read or write it. Lambdas call TMDB directly.
+-- tmdb_cache: shared detail cache (movie, show, season). No policies, so the
+-- publishable key cannot use it. Lambdas read and write it with the Supabase
+-- secret key. Search responses are not stored here.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.tmdb_cache (

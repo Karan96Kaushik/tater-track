@@ -1,4 +1,5 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
+import { logTiming } from '../_shared/timing.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb } from '../_shared/tmdb.js';
@@ -27,6 +28,7 @@ export const handler = withHttp(async (event) => {
   }
 
   const db = user ? supabaseUser() : null;
+  const trackedStarted = Date.now();
   const { data: tracked } = db
     ? await db
         .from('tracked_media')
@@ -36,6 +38,7 @@ export const handler = withHttp(async (event) => {
         .eq('tmdb_id', tmdbId)
         .maybeSingle()
     : { data: null };
+  if (db) logTiming('db', trackedStarted, { table: 'tracked_media', op: 'select' });
 
   if (mediaType === 'movie') {
     const movie = await tmdb.movie(tmdbId);
@@ -56,6 +59,7 @@ export const handler = withHttp(async (event) => {
   const show = await tmdb.show(tmdbId);
   const seasons = show.seasons.filter((s) => includeSpecials || s.season_number > 0);
 
+  const watchedStarted = Date.now();
   const { data: watched } = db
     ? await db
         .from('watched_episodes')
@@ -63,6 +67,7 @@ export const handler = withHttp(async (event) => {
         .eq('user_id', user!.id)
         .eq('tmdb_show_id', tmdbId)
     : { data: null };
+  if (db) logTiming('db', watchedStarted, { table: 'watched_episodes', op: 'select' });
 
   const watchedKeys = new Set((watched ?? []).map((w) => `${w.season_number}:${w.episode_number}`));
 

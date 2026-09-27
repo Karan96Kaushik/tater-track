@@ -17,6 +17,11 @@ export const env = {
   get supabasePublishableKey() {
     return requireEnv('VITE_SUPABASE_PUBLISHABLE_KEY_TATER');
   },
+  /** Service-role key for `tmdb_cache` only. Absent until the Amplify secret is set. */
+  get supabaseSecretKey() {
+    const value = process.env.SUPABASE_SECRET_KEY_TATER?.trim();
+    return value || undefined;
+  },
   get tmdbAccessToken() {
     return requireEnv('TMDB_ACCESS_TOKEN');
   },

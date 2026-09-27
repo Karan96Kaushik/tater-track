@@ -1,5 +1,7 @@
 import { HttpError } from './http.js';
 import { env } from './secrets.js';
+import { readTmdbCache, writeTmdbCache } from './tmdbCache.js';
+import { logTiming } from './timing.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
@@ -59,7 +61,7 @@ export interface TmdbMovieDetails {
 }
 
 /** TMDB occasionally resets connections; retry transient failures with backoff. */
-async function fetchWithRetry(url: URL, attempts = 3): Promise<Response> {
+async function fetchWithRetry(url: URL, attempts = 3): Promise<{ response: Response; attempts: number }> {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -74,7 +76,7 @@ async function fetchWithRetry(url: URL, attempts = 3): Promise<Response> {
       if (response.status >= 500 && attempt < attempts) {
         lastError = new Error(`TMDB responded ${response.status}`);
       } else {
-        return response;
+        return { response, attempts: attempt };
       }
     } catch (error) {
       lastError = error;
@@ -98,7 +100,19 @@ export async function tmdbFetch<T>(
     if (value !== undefined && value !== '') url.searchParams.set(key, String(value));
   }
 
-  const response = await fetchWithRetry(url);
+  const started = Date.now();
+  let response: Response;
+  let attempts = 0;
+  try {
+    const result = await fetchWithRetry(url);
+    response = result.response;
+    attempts = result.attempts;
+  } catch (error) {
+    logTiming('tmdb', started, { path: url.pathname, ok: false });
+    throw error;
+  }
+
+  logTiming('tmdb', started, { path: url.pathname, status: response.status, attempts, ok: response.ok });
 
   if (response.status === 404) {
     throw new HttpError(404, 'Not found on TMDB');
@@ -113,6 +127,46 @@ export async function tmdbFetch<T>(
   }
 
   return (await response.json()) as T;
+}
+
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+type CacheOptions = { fresh?: boolean };
+
+function positiveId(id: number): boolean {
+  return Number.isInteger(id) && id > 0;
+}
+
+function movieTtl(movie: TmdbMovieDetails): number {
+  return movie.status === 'Released' || movie.status === 'Canceled' ? 30 * DAY : 12 * HOUR;
+}
+
+function showTtl(show: TmdbShowDetails): number {
+  return show.status === 'Ended' || show.status === 'Canceled' ? 7 * DAY : 12 * HOUR;
+}
+
+function seasonTtl(season: { episodes: Array<{ air_date: string | null }> }): number {
+  const today = new Date().toISOString().slice(0, 10);
+  const stillOpen =
+    season.episodes.length === 0 ||
+    season.episodes.some((episode) => !episode.air_date || episode.air_date >= today);
+  return stillOpen ? 12 * HOUR : 30 * DAY;
+}
+
+async function cached<T>(
+  cacheKey: string | null,
+  ttlFor: (value: T) => number,
+  load: () => Promise<T>,
+  options?: CacheOptions,
+): Promise<T> {
+  if (!options?.fresh && cacheKey) {
+    const hit = await readTmdbCache<T>(cacheKey);
+    if (hit) return hit;
+  }
+  const value = await load();
+  if (cacheKey) await writeTmdbCache(cacheKey, value, ttlFor(value));
+  return value;
 }
 
 export const tmdb = {
@@ -131,12 +185,32 @@ export const tmdb = {
   trending: (mediaType: 'movie' | 'tv' | 'all', window: 'day' | 'week' = 'week') =>
     tmdbFetch<{ results: TmdbSearchResult[] }>(`/trending/${mediaType}/${window}`),
 
-  movie: (id: number) => tmdbFetch<TmdbMovieDetails>(`/movie/${id}`),
+  movie: (id: number, options?: CacheOptions) =>
+    cached(
+      positiveId(id) ? `movie:${id}` : null,
+      movieTtl,
+      () => tmdbFetch<TmdbMovieDetails>(`/movie/${id}`),
+      options,
+    ),
 
-  show: (id: number) => tmdbFetch<TmdbShowDetails>(`/tv/${id}`),
+  show: (id: number, options?: CacheOptions) =>
+    cached(
+      positiveId(id) ? `tv:${id}` : null,
+      showTtl,
+      () => tmdbFetch<TmdbShowDetails>(`/tv/${id}`),
+      options,
+    ),
 
-  season: (showId: number, seasonNumber: number) =>
-    tmdbFetch<{ season_number: number; name: string; episodes: TmdbEpisode[] }>(
-      `/tv/${showId}/season/${seasonNumber}`,
+  season: (showId: number, seasonNumber: number, options?: CacheOptions) =>
+    cached(
+      positiveId(showId) && Number.isInteger(seasonNumber) && seasonNumber >= 0
+        ? `tv:${showId}:season:${seasonNumber}`
+        : null,
+      seasonTtl,
+      () =>
+        tmdbFetch<{ season_number: number; name: string; episodes: TmdbEpisode[] }>(
+          `/tv/${showId}/season/${seasonNumber}`,
+        ),
+      options,
     ),
 };

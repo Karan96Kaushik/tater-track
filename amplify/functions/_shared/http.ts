@@ -1,4 +1,5 @@
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
+import { logTiming } from './timing.js';
 
 /**
  * CORS belongs to the Function URL (see amplify/backend.ts). Returning the
@@ -35,6 +36,18 @@ export function parseBody<T>(event: LambdaFunctionURLEvent): T {
   }
 }
 
+/** First invocation in this process paid for a cold start. Init itself is in the Lambda REPORT line. */
+let firstRequest = true;
+
+function requestAction(event: LambdaFunctionURLEvent): string | undefined {
+  try {
+    const action = parseBody<{ action?: unknown }>(event).action;
+    return typeof action === 'string' ? action : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Wraps a handler with CORS preflight, method guard, and error translation so
  * every function returns the same shape.
@@ -43,14 +56,25 @@ export function withHttp(
   handler: (event: LambdaFunctionURLEvent) => Promise<LambdaFunctionURLResult>,
 ) {
   return async (event: LambdaFunctionURLEvent): Promise<LambdaFunctionURLResult> => {
+    const started = Date.now();
+    const cold = firstRequest;
+    firstRequest = false;
+    const action = requestAction(event);
+    const fields = { cold, ...(action ? { action } : {}) };
+
     // Preflight is answered by the Function URL itself and never reaches here.
     const method = event.requestContext?.http?.method ?? 'POST';
     if (method !== 'POST') {
+      logTiming('request', started, { ...fields, status: 405 });
       return json(405, { error: 'Method not allowed' });
     }
     try {
-      return await handler(event);
+      const result = await handler(event);
+      logTiming('request', started, { ...fields, status: result.statusCode ?? 200 });
+      return result;
     } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500;
+      logTiming('request', started, { ...fields, status, ok: false });
       if (error instanceof HttpError) {
         return json(error.status, { error: error.message });
       }

@@ -89,7 +89,7 @@ Local/dev scripts: `vite`, `amplify:sandbox` (`npx ampx sandbox`), Amplify secre
 | `report-issue` | Inserts as the authenticated user |
 | `amplify-test` | Smoke / server-side Supabase |
 
-Secrets (Amplify SSM, not Vite): `TMDB_ACCESS_TOKEN`, `CEREBRAS_API_KEY`. `VITE_SUPABASE_URL_TATER` and `VITE_SUPABASE_PUBLISHABLE_KEY_TATER` are baked at synthesize time. Optional `CEREBRAS_MODEL`.
+Secrets (Amplify SSM, not Vite): `TMDB_ACCESS_TOKEN`, `SUPABASE_SECRET_KEY` (writes `tmdb_cache` only), `CEREBRAS_API_KEY`. `VITE_SUPABASE_URL_TATER` and `VITE_SUPABASE_PUBLISHABLE_KEY_TATER` are baked at synthesize time. Optional `CEREBRAS_MODEL`.
 
 ### Lambdas → Cerebras
 

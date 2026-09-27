@@ -1,4 +1,5 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
+import { logTiming } from '../_shared/timing.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb } from '../_shared/tmdb.js';
@@ -139,7 +140,9 @@ export const handler = withHttp(async (event) => {
         query = query.eq('status', body.status);
       }
 
+      const listed = Date.now();
       const { data, error } = await query;
+      logTiming('db', listed, { table: 'tracked_media', op: 'list', ok: !error });
       if (error) throw new HttpError(500, error.message);
       return json(200, { items: data ?? [] });
     }

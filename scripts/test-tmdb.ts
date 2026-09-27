@@ -10,6 +10,15 @@ if (!token) {
 
 const query = process.argv[2] ?? 'the last of us';
 const BASE = 'https://api.themoviedb.org/3';
+const scriptStart = performance.now();
+
+function elapsed(start: number) {
+  return `${Math.round(performance.now() - start)}ms`;
+}
+
+function done() {
+  console.log(`done in ${elapsed(scriptStart)}`);
+}
 
 async function api<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${BASE}${path}`);
@@ -47,21 +56,27 @@ interface SeasonResponse {
   episodes: Array<{ season_number: number; episode_number: number; name: string; air_date: string | null }>;
 }
 
+const searchStart = performance.now();
 const search = await api<SearchResponse>('/search/multi', { query, include_adult: 'false' });
 const show = search.results.find((result) => result.media_type === 'tv');
-console.log(`search/multi "${query}" → ${search.results.length} results`);
+console.log(`search/multi "${query}" → ${search.results.length} results (${elapsed(searchStart)})`);
 
 if (!show) {
   console.log('No TV result to inspect.');
+  done();
   process.exit(0);
 }
 
+const detailsStart = performance.now();
 const details = await api<ShowResponse>(`/tv/${show.id}`);
-console.log(`tv/${show.id} → ${details.name} (${details.status}, ${details.number_of_episodes} eps)`);
+console.log(
+  `tv/${show.id} → ${details.name} (${details.status}, ${details.number_of_episodes} eps) (${elapsed(detailsStart)})`,
+);
 
 const next = details.next_episode_to_air;
 if (!next) {
   console.log('next_episode_to_air: none scheduled');
+  done();
   process.exit(0);
 }
 
@@ -73,12 +88,15 @@ horizon.setUTCDate(horizon.getUTCDate() + 30);
 const today = new Date().toISOString().slice(0, 10);
 const horizonDay = horizon.toISOString().slice(0, 10);
 
+const seasonStart = performance.now();
 const season = await api<SeasonResponse>(`/tv/${show.id}/season/${next.season_number}`);
 const upcoming = season.episodes.filter(
   (episode) => episode.air_date && episode.air_date >= today && episode.air_date <= horizonDay,
 );
 
+console.log(`season/${next.season_number} → ${season.episodes.length} episodes (${elapsed(seasonStart)})`);
 console.log(`episodes airing in the next 30 days: ${upcoming.length}`);
 for (const episode of upcoming) {
   console.log(`  S${episode.season_number}E${episode.episode_number} ${episode.air_date} — ${episode.name}`);
 }
+done();

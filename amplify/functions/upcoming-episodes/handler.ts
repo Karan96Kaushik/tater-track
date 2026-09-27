@@ -1,4 +1,5 @@
 import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
+import { logTiming } from '../_shared/timing.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { supabaseUser } from '../_shared/supabaseUser.js';
 import { tmdb, type TmdbEpisode } from '../_shared/tmdb.js';
@@ -47,6 +48,7 @@ async function mapWithConcurrency<T, R>(
 }
 
 async function listUpcoming(userId: string, windowDays: number) {
+  const started = Date.now();
   const { data, error } = await supabaseUser()
     .from('upcoming_episodes')
     .select('*')
@@ -55,6 +57,7 @@ async function listUpcoming(userId: string, windowDays: number) {
     .lte('air_date', dayString(windowDays))
     .order('air_date', { ascending: true });
 
+  logTiming('db', started, { table: 'upcoming_episodes', op: 'list', ok: !error });
   if (error) throw new HttpError(500, error.message);
   return data ?? [];
 }
@@ -65,11 +68,13 @@ export const handler = withHttp(async (event) => {
   const action = body.action ?? 'list';
   const db = supabaseUser();
 
+  const settingsStarted = Date.now();
   const { data: settings } = await db
     .from('user_settings')
     .select('upcoming_window_days, include_specials')
     .eq('user_id', user.id)
     .maybeSingle();
+  logTiming('db', settingsStarted, { table: 'user_settings', op: 'select' });
 
   const windowDays = body.windowDays ?? settings?.upcoming_window_days ?? 30;
   const includeSpecials = settings?.include_specials ?? false;
@@ -83,12 +88,14 @@ export const handler = withHttp(async (event) => {
   enforceRateLimit(`upcoming-refresh:${user.id}`, 12, 5 * 60_000);
 
   const statuses = body.statuses?.length ? body.statuses : [...DEFAULT_STATUSES];
+  const showsStarted = Date.now();
   const { data: shows, error: showsError } = await db
     .from('tracked_media')
     .select('tmdb_id, title')
     .eq('user_id', user.id)
     .eq('media_type', 'tv')
     .in('status', statuses);
+  logTiming('db', showsStarted, { table: 'tracked_media', op: 'list', ok: !showsError });
 
   if (showsError) throw new HttpError(500, showsError.message);
 
@@ -97,9 +104,10 @@ export const handler = withHttp(async (event) => {
   const rows: UpcomingRow[] = [];
   const failures: number[] = [];
 
+  const refreshStarted = Date.now();
   await mapWithConcurrency(shows ?? [], CONCURRENCY, async (show) => {
     try {
-      const details = await tmdb.show(show.tmdb_id);
+      const details = await tmdb.show(show.tmdb_id, { fresh: true });
       const next = details.next_episode_to_air;
       if (!next?.air_date || next.air_date > horizon) return;
 
@@ -107,7 +115,7 @@ export const handler = withHttp(async (event) => {
       // rest of the episodes landing inside the window.
       let episodes: TmdbEpisode[] = [next];
       try {
-        const season = await tmdb.season(show.tmdb_id, next.season_number);
+        const season = await tmdb.season(show.tmdb_id, next.season_number, { fresh: true });
         episodes = season.episodes.filter(
           (episode) =>
             episode.air_date &&
@@ -150,12 +158,18 @@ export const handler = withHttp(async (event) => {
       console.warn(`Upcoming refresh failed for show ${show.tmdb_id}`, error);
     }
   });
+  logTiming('tmdb-refresh', refreshStarted, {
+    shows: shows?.length ?? 0,
+    failures: failures.length,
+  });
 
   // Drop anything that already aired or was rescheduled out of the snapshot.
+  const deleteStarted = Date.now();
   const { error: deleteError } = await db
     .from('upcoming_episodes')
     .delete()
     .eq('user_id', user.id);
+  logTiming('db', deleteStarted, { table: 'upcoming_episodes', op: 'delete', ok: !deleteError });
   if (deleteError) throw new HttpError(500, deleteError.message);
 
   if (rows.length > 0) {
