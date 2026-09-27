@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { CalendarClock, Check, Loader2, Star, Trash2 } from 'lucide-react';
+import { CalendarClock, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SeasonEpisodes } from '@/components/media/SeasonEpisodes';
 import { mediaApi, type MediaDetails } from '@/lib/amplify/media-functions';
 import type { MediaType, TrackStatus } from '@/lib/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
@@ -77,23 +78,24 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [season]);
 
-  async function toggleEpisode(seasonNumber: number, episodeNumber: number, watched: boolean) {
-    if (!target) return;
-    const key = `${seasonNumber}:${episodeNumber}`;
-    setPendingEpisode(key);
+  async function setEpisodesWatched(seasonNumber: number, episodeNumbers: number[], watched: boolean) {
+    if (!target || episodeNumbers.length === 0) return;
+    setPendingEpisode(`${seasonNumber}:${episodeNumbers[episodeNumbers.length - 1]}`);
     try {
       await mediaApi.setEpisodeWatched({
         tmdbId: target.tmdbId,
         seasonNumber,
-        episodeNumber,
+        episodeNumber: episodeNumbers[episodeNumbers.length - 1],
+        episodeNumbers: watched ? episodeNumbers : undefined,
         watched,
       });
+      const marked = new Set(episodeNumbers);
       setDetails((current) =>
         current
           ? {
               ...current,
               episodes: current.episodes?.map((episode) =>
-                episode.seasonNumber === seasonNumber && episode.episodeNumber === episodeNumber
+                episode.seasonNumber === seasonNumber && marked.has(episode.episodeNumber)
                   ? { ...episode, watched }
                   : episode,
               ),
@@ -101,8 +103,12 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
           : current,
       );
       await refresh();
+      if (watched && episodeNumbers.length > 1) {
+        toast.success(`Marked ${episodeNumbers.length} episodes as watched`);
+      }
     } catch (cause) {
       toast.error('Could not update progress', { description: (cause as Error).message });
+      throw cause;
     } finally {
       setPendingEpisode(null);
     }
@@ -243,71 +249,22 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
             )}
 
             {details.mediaType === 'tv' && details.seasons && details.seasons.length > 0 && (
-              <div className="space-y-3 border-t border-border pt-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={season ?? ''}
-                    onChange={(event) => setSeason(Number(event.target.value))}
-                    className="h-9 rounded-xl border border-border bg-card px-3 text-sm"
-                  >
-                    {details.seasons.map((entry) => (
-                      <option key={entry.seasonNumber} value={entry.seasonNumber}>
-                        {entry.name} ({entry.episodeCount} eps)
-                      </option>
-                    ))}
-                  </select>
-                  {canTrack && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => void markSeason(true)}>
-                        <Check className="size-4" /> Mark season watched
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => void markSeason(false)}>
-                        Clear season
-                      </Button>
-                    </>
-                  )}
-                  {loading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-                </div>
-
-                <ul className="max-h-72 space-y-1 overflow-y-auto pr-1">
-                  {details.episodes?.map((episode) => {
-                    const key = `${episode.seasonNumber}:${episode.episodeNumber}`;
-                    const unaired = Boolean(
-                      episode.airDate && episode.airDate > new Date().toISOString().slice(0, 10),
-                    );
-                    return (
-                      <li key={key}>
-                        <label className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted/70">
-                          {canTrack && (
-                            <input
-                              type="checkbox"
-                              className="size-4 accent-primary"
-                              checked={episode.watched}
-                              disabled={pendingEpisode === key || unaired}
-                              onChange={(event) =>
-                                void toggleEpisode(
-                                  episode.seasonNumber,
-                                  episode.episodeNumber,
-                                  event.target.checked,
-                                )
-                              }
-                            />
-                          )}
-                          <span className="w-12 shrink-0 text-xs text-muted-foreground">
-                            S{episode.seasonNumber}E{episode.episodeNumber}
-                          </span>
-                          <span className="flex-1 truncate text-sm">
-                            {episode.name ?? 'Untitled'}
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {unaired ? relativeAirDate(episode.airDate) : formatDate(episode.airDate)}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
+              <SeasonEpisodes
+                seasons={details.seasons}
+                episodes={details.episodes}
+                season={season}
+                loading={loading}
+                canTrack={canTrack}
+                saving={pendingEpisode !== null}
+                onSeasonChange={setSeason}
+                onMarkSeason={(watched) => void markSeason(watched)}
+                onWatch={(episodeNumbers) =>
+                  season === null ? Promise.resolve() : setEpisodesWatched(season, episodeNumbers, true)
+                }
+                onUnwatch={(episodeNumber) =>
+                  season === null ? Promise.resolve() : setEpisodesWatched(season, [episodeNumber], false)
+                }
+              />
             )}
           </>
         ) : null}

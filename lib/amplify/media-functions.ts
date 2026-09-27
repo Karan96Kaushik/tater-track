@@ -93,6 +93,8 @@ export const mediaApi = {
     seasonNumber: number;
     episodeNumber: number;
     watched: boolean;
+    /** When marking watched, also log these episodes in the same request. */
+    episodeNumbers?: number[];
   }) =>
     callFunction<{ watchedEpisodeCount: number }>('trackMediaUrl', {
       action: 'setEpisodeWatched',

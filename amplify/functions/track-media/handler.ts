@@ -23,10 +23,22 @@ interface TrackRequest {
   notes?: string | null;
   seasonNumber?: number;
   episodeNumber?: number;
+  episodeNumbers?: number[];
   watched?: boolean;
 }
 
 const STATUSES: TrackStatus[] = ['watchlist', 'watching', 'completed', 'dropped'];
+
+/** The selected episode, plus any earlier ones the client asked to catch up. */
+function watchedEpisodeNumbers(body: TrackRequest, selected: number): number[] {
+  const extra = Array.isArray(body.episodeNumbers) ? body.episodeNumbers : [];
+  const numbers = new Set<number>([selected]);
+  for (const value of extra) {
+    if (Number.isInteger(value) && value > 0) numbers.add(value);
+  }
+  if (numbers.size > 100) throw new HttpError(400, 'Too many episodes');
+  return [...numbers];
+}
 
 function requireMedia(body: TrackRequest): { tmdbId: number; mediaType: MediaType } {
   if (!body.tmdbId || (body.mediaType !== 'movie' && body.mediaType !== 'tv')) {
@@ -196,14 +208,16 @@ export const handler = withHttp(async (event) => {
       }
 
       if (watched) {
+        const episodeNumbers = watchedEpisodeNumbers(body, episodeNumber);
+        const watchedAt = new Date().toISOString();
         const { error } = await db.from('watched_episodes').upsert(
-          {
+          episodeNumbers.map((number) => ({
             user_id: user.id,
             tmdb_show_id: tmdbId,
             season_number: seasonNumber,
-            episode_number: episodeNumber,
-            watched_at: new Date().toISOString(),
-          },
+            episode_number: number,
+            watched_at: watchedAt,
+          })),
           { onConflict: 'user_id,tmdb_show_id,season_number,episode_number' },
         );
         if (error) throw new HttpError(500, error.message);
