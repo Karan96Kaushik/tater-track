@@ -25,7 +25,7 @@ export function AppShell() {
             <span className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
               <Popcorn className="size-4" />
             </span>
-            <span className="font-display text-lg font-medium tracking-tight">tater-track</span>
+            <span className="font-display text-lg font-medium tracking-tight">TaterTrack</span>
           </Link>
 
           <nav className="ml-auto hidden items-center gap-1 rounded-full bg-muted/70 p-1 ring-1 ring-border sm:flex">

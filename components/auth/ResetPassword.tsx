@@ -48,8 +48,10 @@ export function ResetPassword() {
   const failureMessage = exchangeError ?? callback.message;
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden p-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.55_0.14_60/0.28),transparent_55%)]" />
+    <div className="relative flex min-h-dvh items-center justify-center p-6">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.55_0.14_60/0.28),transparent_55%)]" />
+      </div>
       <Card className="relative w-full max-w-sm border-border shadow-2xl shadow-black/30">
         <CardHeader className="items-center text-center">
           <span className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/25">
