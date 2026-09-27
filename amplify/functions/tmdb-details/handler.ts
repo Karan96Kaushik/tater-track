@@ -77,9 +77,17 @@ export const handler = withHttp(async (event) => {
   ]);
 
   const seasons = show.seasons.filter((s) => includeSpecials || s.season_number > 0);
+  let seasonPayload = season;
+  if (!seasonPayload && seasons[0]) {
+    try {
+      seasonPayload = await tmdb.season(tmdbId, seasons[0].season_number);
+    } catch (error) {
+      console.warn(`Default season fetch failed for show ${tmdbId}`, error);
+    }
+  }
   const watchedKeys = new Set(watched.map((w) => `${w.season_number}:${w.episode_number}`));
 
-  const episodes = (season?.episodes ?? []).map((episode: TmdbEpisode) => ({
+  const episodes = (seasonPayload?.episodes ?? []).map((episode: TmdbEpisode) => ({
     seasonNumber: episode.season_number,
     episodeNumber: episode.episode_number,
     name: episode.name,

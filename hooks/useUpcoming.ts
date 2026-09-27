@@ -5,6 +5,12 @@ import { mediaApi } from '@/lib/amplify/media-functions';
 import type { UpcomingEpisode } from '@/lib/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 
+const sessionLists = new Map<string, UpcomingEpisode[]>();
+
+function listKey(userId: string, windowDays: number): string {
+  return `${userId}:${windowDays}`;
+}
+
 export function useUpcoming(windowDays?: number) {
   const { user } = useAuth();
   const [items, setItems] = useState<UpcomingEpisode[]>([]);
@@ -22,6 +28,7 @@ export function useUpcoming(windowDays?: number) {
     setLoading(true);
     try {
       const { items: next } = await mediaApi.upcoming('list', windowDays);
+      sessionLists.set(listKey(user.id, windowDays), next);
       setItems(next);
       setError(null);
     } catch (cause) {
@@ -38,6 +45,7 @@ export function useUpcoming(windowDays?: number) {
       setRefreshing(true);
       try {
         const { items: next, showsChecked } = await mediaApi.upcoming('refresh', windowDays);
+        sessionLists.set(listKey(user.id, windowDays), next);
         setItems(next);
         setError(null);
         if (!options?.silent) {
@@ -68,6 +76,14 @@ export function useUpcoming(windowDays?: number) {
     seenWindow.current = windowDays;
     if (previous !== undefined && previous !== windowDays) {
       void refreshFromTmdb({ silent: true });
+      return;
+    }
+
+    const cached = sessionLists.get(listKey(user.id, windowDays));
+    if (cached) {
+      setItems(cached);
+      setLoading(false);
+      setError(null);
       return;
     }
     void load();

@@ -28,11 +28,6 @@ interface UpcomingRow {
 
 const DEFAULT_STATUSES = ['watching', 'completed'] as const;
 const CONCURRENCY = 5;
-const STALE_MS = 12 * 60 * 60 * 1000;
-/** Collapses back-to-back loads when a refresh found nothing to store. */
-const EMPTY_SNAPSHOT_MS = 2 * 60 * 1000;
-
-const emptySnapshotAt = new Map<string, number>();
 
 function dayString(offsetDays = 0): string {
   const date = new Date();
@@ -124,55 +119,22 @@ async function listUpcoming(userId: string, windowDays: number) {
   return data ?? [];
 }
 
-function freshnessKey(userId: string, windowDays: number): string {
-  return `${userId}:${windowDays}`;
-}
-
-/** True when the stored schedule still covers this window and this library. */
-async function snapshotIsFresh(userId: string, windowDays: number): Promise<boolean> {
-  const key = freshnessKey(userId, windowDays);
-  const db = supabaseUser();
-  const started = Date.now();
-  const { data: stamp, error } = await db
-    .from('upcoming_episodes')
-    .select('refreshed_at')
-    .eq('user_id', userId)
-    .order('refreshed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  logTiming('db', started, { table: 'upcoming_episodes', op: 'freshness', ok: !error });
-  if (error) throw new HttpError(500, error.message);
-
-  if (!stamp?.refreshed_at) {
-    const memory = emptySnapshotAt.get(key);
-    return Boolean(memory && Date.now() - memory < EMPTY_SNAPSHOT_MS);
-  }
-
-  const at = new Date(stamp.refreshed_at).getTime();
-  if (Number.isNaN(at) || Date.now() - at >= STALE_MS) return false;
-
-  const showStarted = Date.now();
-  const { data: show, error: showError } = await db
-    .from('tracked_media')
-    .select('updated_at')
-    .eq('user_id', userId)
-    .eq('media_type', 'tv')
-    .in('status', [...DEFAULT_STATUSES])
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  logTiming('db', showStarted, { table: 'tracked_media', op: 'freshness', ok: !showError });
-  if (showError) throw new HttpError(500, showError.message);
-  // Ignore writes from this refresh itself (episode counts bump updated_at) and small clock skew.
-  if (show?.updated_at && new Date(show.updated_at).getTime() > at + 60_000) return false;
-  return true;
-}
-
 export const handler = withHttp(async (event) => {
   const user = await verifySupabaseAuth(event);
   const body = parseBody<UpcomingRequest>(event);
   const action = body.action ?? 'list';
   const db = supabaseUser();
+
+  // Page loads read the stored schedule. TMDB runs only for an explicit refresh.
+  if (action !== 'refresh') {
+    enforceRateLimit(`upcoming-list:${user.id}`, 90);
+    return json(200, {
+      items: await listUpcoming(user.id, clampWindow(body.windowDays)),
+      refreshed: false,
+    });
+  }
+
+  enforceRateLimit(`upcoming-refresh:${user.id}`, 12, 5 * 60_000);
 
   const settingsStarted = Date.now();
   const { data: settings } = await db
@@ -184,17 +146,6 @@ export const handler = withHttp(async (event) => {
 
   const windowDays = clampWindow(body.windowDays ?? settings?.upcoming_window_days);
   const includeSpecials = settings?.include_specials ?? false;
-
-  // Opening the page only used to read the snapshot. That table stays empty
-  // until a refresh, so shows can have a next episode while Upcoming does not.
-  const rebuild = action === 'refresh' || !(await snapshotIsFresh(user.id, windowDays));
-  if (!rebuild) {
-    enforceRateLimit(`upcoming-list:${user.id}`, 90);
-    return json(200, { items: await listUpcoming(user.id, windowDays), refreshed: false });
-  }
-
-  if (action === 'refresh') enforceRateLimit(`upcoming-refresh:${user.id}`, 12, 5 * 60_000);
-  else enforceRateLimit(`upcoming-list:${user.id}`, 90);
 
   const statuses = body.statuses?.length ? body.statuses : [...DEFAULT_STATUSES];
   const showsStarted = Date.now();
@@ -296,8 +247,6 @@ export const handler = withHttp(async (event) => {
       .upsert(rows, { onConflict: 'user_id,tmdb_show_id,season_number,episode_number' });
     logTiming('db', insertStarted, { table: 'upcoming_episodes', op: 'upsert', ok: !insertError });
     if (insertError) throw new HttpError(500, insertError.message);
-  } else {
-    emptySnapshotAt.set(freshnessKey(user.id, windowDays), Date.now());
   }
 
   // Remove episodes that fell out of the window. Newer rows from an overlapping

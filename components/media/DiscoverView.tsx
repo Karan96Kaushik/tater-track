@@ -12,6 +12,8 @@ import { useLibrary } from '@/hooks/useLibrary';
 
 type Filter = 'multi' | 'movie' | 'tv';
 
+const trendingCache = new Map<Filter, SearchHit[]>();
+
 export function DiscoverView() {
   const { entryFor } = useLibrary();
   const [query, setQuery] = useState('');
@@ -25,6 +27,18 @@ export function DiscoverView() {
   useEffect(() => {
     if (!areFunctionsConfigured) return;
 
+    const trimmed = query.trim();
+    if (!trimmed) {
+      const cached = trendingCache.get(filter);
+      if (cached) {
+        setResults(cached);
+        setTrending(true);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+    }
+
     // Debounced so typing doesn't spend a TMDB call per keystroke.
     const timer = setTimeout(async () => {
       setLoading(true);
@@ -33,12 +47,13 @@ export function DiscoverView() {
         setResults(response.results);
         setTrending(response.trending);
         setError(null);
+        if (!trimmed) trendingCache.set(filter, response.results);
       } catch (cause) {
         setError((cause as Error).message);
       } finally {
         setLoading(false);
       }
-    }, query ? 350 : 0);
+    }, trimmed ? 350 : 0);
 
     return () => clearTimeout(timer);
   }, [query, filter]);

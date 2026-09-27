@@ -11,6 +11,9 @@ const DEFAULTS = {
   theme: 'system',
 } satisfies Partial<UserSettings>;
 
+let cachedUserId: string | null = null;
+let cachedSettings: UserSettings | null = null;
+
 export function useSettings() {
   const { user } = useAuth();
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -19,6 +22,12 @@ export function useSettings() {
   useEffect(() => {
     if (!user) {
       setSettings(null);
+      setLoading(false);
+      return;
+    }
+
+    if (cachedUserId === user.id && cachedSettings) {
+      setSettings(cachedSettings);
       setLoading(false);
       return;
     }
@@ -33,7 +42,10 @@ export function useSettings() {
 
       if (!active) return;
       if (error) console.warn('Failed to load settings', error.message);
-      setSettings(data ?? ({ user_id: user.id, ...DEFAULTS } as UserSettings));
+      const next = data ?? ({ user_id: user.id, ...DEFAULTS } as UserSettings);
+      cachedUserId = user.id;
+      cachedSettings = next;
+      setSettings(next);
       setLoading(false);
     })();
 
@@ -46,6 +58,8 @@ export function useSettings() {
     async (patch: Partial<UserSettings>) => {
       if (!user) return;
       const next = { ...(settings ?? ({ user_id: user.id, ...DEFAULTS } as UserSettings)), ...patch };
+      cachedUserId = user.id;
+      cachedSettings = next;
       setSettings(next);
 
       const { error } = await supabase

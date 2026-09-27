@@ -54,7 +54,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
         });
         setDetails(data);
         if (seasonNumber === undefined && data.mediaType === 'tv') {
-          const first = data.seasons?.[0]?.seasonNumber;
+          const first = data.episodes?.[0]?.seasonNumber ?? data.seasons?.[0]?.seasonNumber;
           if (first !== undefined) setSeason(first);
         }
       } catch (cause) {
@@ -71,12 +71,6 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
     setSeason(null);
     if (target) void load();
   }, [target, load]);
-
-  useEffect(() => {
-    if (season !== null) void load(season);
-    // `load` changes only with the target, which resets season anyway.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [season]);
 
   async function setEpisodesWatched(seasonNumber: number, episodeNumbers: number[], watched: boolean) {
     if (!target || episodeNumbers.length === 0) return;
@@ -260,7 +254,10 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                 loading={loading}
                 canTrack={canTrack}
                 saving={pendingEpisode !== null}
-                onSeasonChange={setSeason}
+                onSeasonChange={(next) => {
+                  setSeason(next);
+                  void load(next);
+                }}
                 onMarkSeason={(watched) => void markSeason(watched)}
                 onWatch={(episodeNumbers) =>
                   season === null ? Promise.resolve() : setEpisodesWatched(season, episodeNumbers, true)
