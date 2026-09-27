@@ -87,3 +87,13 @@
     background: oklch(0.8 0.14 78 / 0.35);
   }
 }
+
+/* iOS Safari zooms a focused field whose computed font-size is under 16px.
+   Standalone PWAs keep that scale after blur. Unlayered so this beats text-sm. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not([type='submit']):not([type='reset']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

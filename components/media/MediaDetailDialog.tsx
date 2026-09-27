@@ -39,6 +39,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
   const [loading, setLoading] = useState(false);
   const [season, setSeason] = useState<number | null>(null);
   const [pendingEpisode, setPendingEpisode] = useState<string | null>(null);
+  const [pendingBulk, setPendingBulk] = useState(false);
 
   const tracked = target ? entryFor(target.tmdbId, target.mediaType) : undefined;
 
@@ -112,6 +113,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
 
   async function markSeason(watched: boolean) {
     if (!target || season === null) return;
+    setPendingBulk(true);
     try {
       await mediaApi.setSeasonWatched({ tmdbId: target.tmdbId, seasonNumber: season, watched });
       await Promise.all([load(season), refresh()]);
@@ -120,6 +122,29 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
       );
     } catch (cause) {
       toast.error('Could not update the season', { description: (cause as Error).message });
+    } finally {
+      setPendingBulk(false);
+    }
+  }
+
+  async function markShow() {
+    if (!target) return;
+    setPendingBulk(true);
+    try {
+      const result = await mediaApi.setShowWatched({ tmdbId: target.tmdbId });
+      await Promise.all([season === null ? Promise.resolve() : load(season), refresh()]);
+      toast.success(
+        result.marked === 0
+          ? 'No aired episodes to mark'
+          : !tracked
+            ? 'Added to your library'
+            : 'All aired episodes marked as watched',
+      );
+    } catch (cause) {
+      toast.error('Could not update the show', { description: (cause as Error).message });
+      throw cause;
+    } finally {
+      setPendingBulk(false);
     }
   }
 
@@ -253,12 +278,13 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                 season={season}
                 loading={loading}
                 canTrack={canTrack}
-                saving={pendingEpisode !== null}
+                saving={pendingEpisode !== null || pendingBulk}
                 onSeasonChange={(next) => {
                   setSeason(next);
                   void load(next);
                 }}
                 onMarkSeason={(watched) => void markSeason(watched)}
+                onMarkShow={markShow}
                 onWatch={(episodeNumbers) =>
                   season === null ? Promise.resolve() : setEpisodesWatched(season, episodeNumbers, true)
                 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, CheckCheck, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { EpisodeDetail, SeasonSummary } from '@/lib/amplify/media-functions';
 import { cn, formatDate, relativeAirDate } from '@/lib/utils';
@@ -18,6 +18,7 @@ interface SeasonEpisodesProps {
   saving: boolean;
   onSeasonChange: (season: number) => void;
   onMarkSeason: (watched: boolean) => void;
+  onMarkShow: () => Promise<void>;
   onWatch: (episodeNumbers: number[]) => Promise<void>;
   onUnwatch: (episodeNumber: number) => Promise<void>;
 }
@@ -51,10 +52,12 @@ export function SeasonEpisodes({
   saving,
   onSeasonChange,
   onMarkSeason,
+  onMarkShow,
   onWatch,
   onUnwatch,
 }: SeasonEpisodesProps) {
   const [catchUp, setCatchUp] = useState<CatchUp | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const list = episodes ?? [];
   const seasonIndex = seasons.findIndex((entry) => entry.seasonNumber === season);
@@ -67,6 +70,7 @@ export function SeasonEpisodes({
 
   useEffect(() => {
     setCatchUp(null);
+    setConfirmAll(false);
     listRef.current?.scrollTo({ top: 0 });
   }, [season]);
 
@@ -88,6 +92,15 @@ export function SeasonEpisodes({
     try {
       await onWatch(numbers);
       setCatchUp(null);
+    } catch {
+      // The caller surfaces the error.
+    }
+  }
+
+  async function confirmShow() {
+    try {
+      await onMarkShow();
+      setConfirmAll(false);
     } catch {
       // The caller surfaces the error.
     }
@@ -180,6 +193,17 @@ export function SeasonEpisodes({
           </Button>
           <Button
             size="sm"
+            variant="outline"
+            disabled={saving || seasons.length === 0}
+            onClick={() => {
+              setCatchUp(null);
+              setConfirmAll(true);
+            }}
+          >
+            <CheckCheck className="size-4" /> Mark all episodes watched
+          </Button>
+          <Button
+            size="sm"
             variant="ghost"
             disabled={saving || watchedCount === 0}
             onClick={() => {
@@ -189,6 +213,25 @@ export function SeasonEpisodes({
           >
             Clear season
           </Button>
+        </div>
+      )}
+
+      {confirmAll && (
+        <div className="rounded-2xl bg-card p-3 shadow-lg shadow-black/20 ring-1 ring-primary/30">
+          <p className="text-sm font-medium">Mark every aired episode?</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Every episode of this show that has already aired will be marked watched, across all seasons.
+            Episodes that have not aired yet stay unmarked.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" disabled={saving} onClick={() => void confirmShow()}>
+              {saving && <Loader2 className="size-4 animate-spin" />}
+              Mark all watched
+            </Button>
+            <Button size="sm" variant="ghost" disabled={saving} onClick={() => setConfirmAll(false)}>
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 

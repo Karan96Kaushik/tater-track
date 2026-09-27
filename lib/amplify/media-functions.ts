@@ -109,6 +109,13 @@ export const mediaApi = {
       ...params,
     }),
 
+  setShowWatched: (params: { tmdbId: number }) =>
+    callFunction<{ watchedEpisodeCount: number; marked: number }>('trackMediaUrl', {
+      action: 'setShowWatched',
+      mediaType: 'tv',
+      ...params,
+    }),
+
   upcoming: (action: 'list' | 'refresh' = 'list', windowDays?: number) =>
     callFunction<{ items: UpcomingEpisode[]; refreshed: boolean; showsChecked?: number }>(
       'upcomingEpisodesUrl',

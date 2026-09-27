@@ -15,7 +15,8 @@ interface TrackRequest {
     | 'remove'
     | 'rate'
     | 'setEpisodeWatched'
-    | 'setSeasonWatched';
+    | 'setSeasonWatched'
+    | 'setShowWatched';
   status?: TrackStatus | 'all';
   tmdbId?: number;
   mediaType?: MediaType;
@@ -29,6 +30,25 @@ interface TrackRequest {
 }
 
 const STATUSES: TrackStatus[] = ['watchlist', 'watching', 'completed', 'dropped'];
+
+/** Episodes with an air date on or before today. Unaired episodes stay unmarked. */
+function airedOnOrBefore<T extends { air_date: string | null }>(episodes: T[], today: string): T[] {
+  return episodes.filter((episode) => episode.air_date && episode.air_date <= today);
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 /** The selected episode, plus any earlier ones the client asked to catch up. */
 function watchedEpisodeNumbers(body: TrackRequest, selected: number): number[] {
@@ -278,7 +298,7 @@ export const handler = withHttp(async (event) => {
         const season = await tmdb.season(tmdbId, seasonNumber);
         const today = new Date().toISOString().slice(0, 10);
         // Only episodes that have actually aired can be marked watched.
-        const aired = season.episodes.filter((e) => e.air_date && e.air_date <= today);
+        const aired = airedOnOrBefore(season.episodes, today);
         if (aired.length > 0) {
           const { error } = await db.from('watched_episodes').upsert(
             aired.map((episode) => ({
@@ -307,6 +327,41 @@ export const handler = withHttp(async (event) => {
 
       const watchedEpisodeCount = await syncShowProgress(user.id, tmdbId);
       return json(200, { watchedEpisodeCount });
+    }
+
+    case 'setShowWatched': {
+      const { tmdbId } = requireMedia({ ...body, mediaType: 'tv' });
+      const show = await tmdb.show(tmdbId);
+      // Specials (season 0) stay out, matching the season list in the app.
+      const seasonNumbers = show.seasons
+        .map((season) => season.season_number)
+        .filter((seasonNumber) => seasonNumber > 0);
+
+      const seasons = await mapLimit(seasonNumbers, 6, (seasonNumber) => tmdb.season(tmdbId, seasonNumber));
+      const today = new Date().toISOString().slice(0, 10);
+      const aired = seasons.flatMap((season) => airedOnOrBefore(season.episodes, today));
+      const watchedAt = new Date().toISOString();
+
+      const CHUNK = 200;
+      for (let index = 0; index < aired.length; index += CHUNK) {
+        const { error } = await db.from('watched_episodes').upsert(
+          aired.slice(index, index + CHUNK).map((episode) => ({
+            user_id: user.id,
+            tmdb_show_id: tmdbId,
+            season_number: episode.season_number,
+            episode_number: episode.episode_number,
+            episode_name: episode.name,
+            air_date: episode.air_date,
+            watched_at: watchedAt,
+          })),
+          { onConflict: 'user_id,tmdb_show_id,season_number,episode_number' },
+        );
+        if (error) throw new HttpError(500, error.message);
+      }
+
+      if (aired.length > 0) await ensureShowTracked(user.id, tmdbId);
+      const watchedEpisodeCount = await syncShowProgress(user.id, tmdbId);
+      return json(200, { watchedEpisodeCount, marked: aired.length });
     }
 
     default:

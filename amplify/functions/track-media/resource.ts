@@ -3,7 +3,7 @@ import { defineFunction, secret } from '@aws-amplify/backend';
 export const trackMedia = defineFunction({
   name: 'track-media',
   entry: './handler.ts',
-  timeoutSeconds: 30,
+  timeoutSeconds: 60,
   memoryMB: 512,
   environment: {
     TMDB_ACCESS_TOKEN: secret('TMDB_ACCESS_TOKEN'),
