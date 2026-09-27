@@ -47,6 +47,35 @@ function requireMedia(body: TrackRequest): { tmdbId: number; mediaType: MediaTyp
   return { tmdbId: body.tmdbId, mediaType: body.mediaType };
 }
 
+/** Creates a library row so episode progress has somewhere to land. */
+async function ensureShowTracked(userId: string, tmdbShowId: number): Promise<void> {
+  const db = supabaseUser();
+  const { data: existing, error: lookupError } = await db
+    .from('tracked_media')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('media_type', 'tv')
+    .eq('tmdb_id', tmdbShowId)
+    .maybeSingle();
+  if (lookupError) throw new HttpError(500, lookupError.message);
+  if (existing) return;
+
+  const show = await tmdb.show(tmdbShowId);
+  const { error } = await db.from('tracked_media').insert({
+    user_id: userId,
+    tmdb_id: tmdbShowId,
+    media_type: 'tv',
+    status: 'watchlist',
+    title: show.name,
+    poster_path: show.poster_path,
+    backdrop_path: show.backdrop_path,
+    release_date: show.first_air_date || null,
+    total_episodes: show.number_of_episodes,
+  });
+  // A parallel mark can insert the same show first.
+  if (error && error.code !== '23505') throw new HttpError(500, error.message);
+}
+
 /** Recomputes the denormalised episode counters after any episode mutation. */
 async function syncShowProgress(userId: string, tmdbShowId: number): Promise<number> {
   const db = supabaseUser();
@@ -221,6 +250,7 @@ export const handler = withHttp(async (event) => {
           { onConflict: 'user_id,tmdb_show_id,season_number,episode_number' },
         );
         if (error) throw new HttpError(500, error.message);
+        await ensureShowTracked(user.id, tmdbId);
       } else {
         const { error } = await db
           .from('watched_episodes')
@@ -260,6 +290,7 @@ export const handler = withHttp(async (event) => {
             { onConflict: 'user_id,tmdb_show_id,season_number,episode_number' },
           );
           if (error) throw new HttpError(500, error.message);
+          await ensureShowTracked(user.id, tmdbId);
         }
       } else {
         const { error } = await db

@@ -103,7 +103,9 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
           : current,
       );
       await refresh();
-      if (watched && episodeNumbers.length > 1) {
+      if (watched && !tracked) {
+        toast.success('Added to your library');
+      } else if (watched && episodeNumbers.length > 1) {
         toast.success(`Marked ${episodeNumbers.length} episodes as watched`);
       }
     } catch (cause) {
@@ -119,7 +121,9 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
     try {
       await mediaApi.setSeasonWatched({ tmdbId: target.tmdbId, seasonNumber: season, watched });
       await Promise.all([load(season), refresh()]);
-      toast.success(watched ? 'Season marked as watched' : 'Season cleared');
+      toast.success(
+        watched && !tracked ? 'Added to your library' : watched ? 'Season marked as watched' : 'Season cleared',
+      );
     } catch (cause) {
       toast.error('Could not update the season', { description: (cause as Error).message });
     }
