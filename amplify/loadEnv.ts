@@ -24,3 +24,9 @@ for (const file of ['.env', '.env.local']) {
 if (process.env.VITE_SUPABASE_URL_TATER) {
   process.env.VITE_SUPABASE_URL_TATER = normalizeSupabaseUrl(process.env.VITE_SUPABASE_URL_TATER);
 }
+
+if (!process.env.VITE_SUPABASE_URL_TATER || !process.env.VITE_SUPABASE_PUBLISHABLE_KEY_TATER) {
+  throw new Error(
+    'VITE_SUPABASE_URL_TATER and VITE_SUPABASE_PUBLISHABLE_KEY_TATER must be set before synthesizing the backend. They are baked into each Lambda.',
+  );
+}

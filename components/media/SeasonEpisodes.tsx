@@ -218,7 +218,7 @@ export function SeasonEpisodes({
                     {episode.name ?? 'Untitled'}
                   </span>
                   <span className="shrink-0 text-right text-[11px] leading-tight text-muted-foreground">
-                    {upNext?.episodeNumber === episode.episodeNumber && (
+                    {canTrack && upNext?.episodeNumber === episode.episodeNumber && (
                       <span className="block font-medium text-primary">Up next</span>
                     )}
                     {unaired ? relativeAirDate(episode.airDate) : formatDate(episode.airDate)}
