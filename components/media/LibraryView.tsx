@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Library, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Library, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaCard } from '@/components/media/MediaCard';
 import { MediaDetailDialog } from '@/components/media/MediaDetailDialog';
 import { StatsRow } from '@/components/metrics/StatsRow';
 import { useLibrary } from '@/hooks/useLibrary';
-import type { MediaType, TrackStatus } from '@/lib/supabase/types';
+import type { MediaType, TrackedMedia, TrackStatus } from '@/lib/supabase/types';
 
 type Filter = TrackStatus | 'all';
 
@@ -19,15 +19,43 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'dropped', label: 'Dropped' },
 ];
 
+const STATUS_RANK: Record<TrackStatus, number> = {
+  watching: 0,
+  watchlist: 1,
+  completed: 2,
+  dropped: 3,
+};
+
+const PAGE_SIZE = 24;
+
+function byWatchingThenDropped(items: TrackedMedia[]) {
+  return [...items].sort((left, right) => STATUS_RANK[left.status] - STATUS_RANK[right.status]);
+}
+
 export function LibraryView() {
   const { items, loading, error } = useLibrary();
   const [filter, setFilter] = useState<Filter>('all');
+  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<{ tmdbId: number; mediaType: MediaType } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
-  const visible = useMemo(
-    () => (filter === 'all' ? items : items.filter((item) => item.status === filter)),
-    [items, filter],
-  );
+  const visible = useMemo(() => {
+    const filtered = filter === 'all' ? items : items.filter((item) => item.status === filter);
+    return byWatchingThenDropped(filtered);
+  }, [items, filter]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = visible.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filter]);
+
+  function changePage(next: number) {
+    setPage(next);
+    gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   return (
     <div className="space-y-6">
@@ -68,23 +96,53 @@ export function LibraryView() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {visible.map((item) => (
-            <MediaCard
-              key={item.id}
-              title={item.title}
-              mediaType={item.media_type}
-              posterPath={item.poster_path}
-              releaseDate={item.release_date}
-              status={item.status}
-              progress={
-                item.media_type === 'tv'
-                  ? { watched: item.watched_episode_count, total: item.total_episodes }
-                  : null
-              }
-              onClick={() => setSelected({ tmdbId: item.tmdb_id, mediaType: item.media_type })}
-            />
-          ))}
+        <div ref={gridRef} className="scroll-mt-24 space-y-6">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {pageItems.map((item) => (
+              <MediaCard
+                key={item.id}
+                title={item.title}
+                mediaType={item.media_type}
+                posterPath={item.poster_path}
+                releaseDate={item.release_date}
+                status={item.status}
+                progress={
+                  item.media_type === 'tv'
+                    ? { watched: item.watched_episode_count, total: item.total_episodes }
+                    : null
+                }
+                onClick={() => setSelected({ tmdbId: item.tmdb_id, mediaType: item.media_type })}
+              />
+            ))}
+          </div>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={currentPage === 0}
+                onClick={() => changePage(currentPage - 1)}
+              >
+                <ChevronLeft />
+                Prev
+              </Button>
+              <span className="min-w-16 text-center text-sm tabular-nums text-muted-foreground">
+                {currentPage + 1} of {pageCount}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={currentPage >= pageCount - 1}
+                onClick={() => changePage(currentPage + 1)}
+              >
+                Next
+                <ChevronRight />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
