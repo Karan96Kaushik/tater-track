@@ -2,7 +2,7 @@ import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { logTiming } from '../_shared/timing.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { supabaseUser } from '../_shared/supabaseUser.js';
-import { tmdb } from '../_shared/tmdb.js';
+import { tmdb, type TmdbEpisode } from '../_shared/tmdb.js';
 import { clientAddress, verifySupabaseAuthOptional } from '../_shared/verifySupabaseAuth.js';
 
 interface DetailsRequest {
@@ -11,6 +11,30 @@ interface DetailsRequest {
   /** When set, the episode list for that season is included. */
   seasonNumber?: number;
   includeSpecials?: boolean;
+}
+
+async function selectTracked(userId: string, mediaType: 'movie' | 'tv', tmdbId: number) {
+  const started = Date.now();
+  const { data } = await supabaseUser()
+    .from('tracked_media')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('media_type', mediaType)
+    .eq('tmdb_id', tmdbId)
+    .maybeSingle();
+  logTiming('db', started, { table: 'tracked_media', op: 'select' });
+  return data;
+}
+
+async function selectWatched(userId: string, tmdbId: number) {
+  const started = Date.now();
+  const { data } = await supabaseUser()
+    .from('watched_episodes')
+    .select('season_number, episode_number')
+    .eq('user_id', userId)
+    .eq('tmdb_show_id', tmdbId);
+  logTiming('db', started, { table: 'watched_episodes', op: 'select' });
+  return data ?? [];
 }
 
 export const handler = withHttp(async (event) => {
@@ -27,21 +51,10 @@ export const handler = withHttp(async (event) => {
     throw new HttpError(400, 'tmdbId and mediaType ("movie" | "tv") are required');
   }
 
-  const db = user ? supabaseUser() : null;
-  const trackedStarted = Date.now();
-  const { data: tracked } = db
-    ? await db
-        .from('tracked_media')
-        .select('*')
-        .eq('user_id', user!.id)
-        .eq('media_type', mediaType)
-        .eq('tmdb_id', tmdbId)
-        .maybeSingle()
-    : { data: null };
-  if (db) logTiming('db', trackedStarted, { table: 'tracked_media', op: 'select' });
+  const trackedPromise = user ? selectTracked(user.id, mediaType, tmdbId) : Promise.resolve(null);
 
   if (mediaType === 'movie') {
-    const movie = await tmdb.movie(tmdbId);
+    const [tracked, movie] = await Promise.all([trackedPromise, tmdb.movie(tmdbId)]);
     return json(200, {
       mediaType,
       tmdbId,
@@ -56,34 +69,25 @@ export const handler = withHttp(async (event) => {
     });
   }
 
-  const show = await tmdb.show(tmdbId);
+  const [tracked, show, watched, season] = await Promise.all([
+    trackedPromise,
+    tmdb.show(tmdbId),
+    user ? selectWatched(user.id, tmdbId) : Promise.resolve([]),
+    seasonNumber !== undefined ? tmdb.season(tmdbId, seasonNumber) : Promise.resolve(null),
+  ]);
+
   const seasons = show.seasons.filter((s) => includeSpecials || s.season_number > 0);
+  const watchedKeys = new Set(watched.map((w) => `${w.season_number}:${w.episode_number}`));
 
-  const watchedStarted = Date.now();
-  const { data: watched } = db
-    ? await db
-        .from('watched_episodes')
-        .select('season_number, episode_number')
-        .eq('user_id', user!.id)
-        .eq('tmdb_show_id', tmdbId)
-    : { data: null };
-  if (db) logTiming('db', watchedStarted, { table: 'watched_episodes', op: 'select' });
-
-  const watchedKeys = new Set((watched ?? []).map((w) => `${w.season_number}:${w.episode_number}`));
-
-  let episodes: Array<Record<string, unknown>> = [];
-  if (seasonNumber !== undefined) {
-    const season = await tmdb.season(tmdbId, seasonNumber);
-    episodes = season.episodes.map((episode) => ({
-      seasonNumber: episode.season_number,
-      episodeNumber: episode.episode_number,
-      name: episode.name,
-      overview: episode.overview,
-      airDate: episode.air_date,
-      stillPath: episode.still_path,
-      watched: watchedKeys.has(`${episode.season_number}:${episode.episode_number}`),
-    }));
-  }
+  const episodes = (season?.episodes ?? []).map((episode: TmdbEpisode) => ({
+    seasonNumber: episode.season_number,
+    episodeNumber: episode.episode_number,
+    name: episode.name,
+    overview: episode.overview,
+    airDate: episode.air_date,
+    stillPath: episode.still_path,
+    watched: watchedKeys.has(`${episode.season_number}:${episode.episode_number}`),
+  }));
 
   return json(200, {
     mediaType,
