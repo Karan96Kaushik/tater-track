@@ -40,17 +40,21 @@ export function UpcomingView() {
           variant="outline"
           size="sm"
           className="rounded-full sm:ml-auto"
-          disabled={refreshing}
+          disabled={refreshing || (loading && items.length === 0)}
           onClick={() => void refreshFromTmdb()}
         >
-          {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+          {refreshing || (loading && items.length === 0) ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <RefreshCw className="size-4" />
+          )}
           Refresh from TMDB
         </Button>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {loading && items.length === 0 ? (
+      {(loading || refreshing) && items.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-20 w-full rounded-lg" />
@@ -63,7 +67,7 @@ export function UpcomingView() {
           </span>
           <p className="font-display text-xl font-medium">Nothing scheduled</p>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            No episodes in this window. Refresh to pull the latest air dates from TMDB.
+            No episodes air in the next {windowDays ?? 30} days. Dates further out still show on each show.
           </p>
         </div>
       ) : (

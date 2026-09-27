@@ -2,7 +2,7 @@ import { HttpError, json, parseBody, withHttp } from '../_shared/http.js';
 import { logTiming } from '../_shared/timing.js';
 import { enforceRateLimit } from '../_shared/rateLimit.js';
 import { supabaseUser } from '../_shared/supabaseUser.js';
-import { tmdb, type TmdbEpisode } from '../_shared/tmdb.js';
+import { tmdb, type TmdbEpisode, type TmdbShowDetails } from '../_shared/tmdb.js';
 import { verifySupabaseAuth } from '../_shared/verifySupabaseAuth.js';
 
 interface UpcomingRequest {
@@ -28,11 +28,73 @@ interface UpcomingRow {
 
 const DEFAULT_STATUSES = ['watching', 'completed'] as const;
 const CONCURRENCY = 5;
+const STALE_MS = 12 * 60 * 60 * 1000;
+/** Collapses back-to-back loads when a refresh found nothing to store. */
+const EMPTY_SNAPSHOT_MS = 2 * 60 * 1000;
+
+const emptySnapshotAt = new Map<string, number>();
 
 function dayString(offsetDays = 0): string {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + offsetDays);
   return date.toISOString().slice(0, 10);
+}
+
+function clampWindow(value: unknown, fallback = 30): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(180, Math.max(1, Math.round(parsed)));
+}
+
+function airDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const day = value.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
+function inWindow(episode: TmdbEpisode, today: string, horizon: string, includeSpecials: boolean): boolean {
+  const air = airDay(episode.air_date);
+  return Boolean(air && air >= today && air <= horizon && (includeSpecials || episode.season_number > 0));
+}
+
+/**
+ * Seasons that can contain an episode airing inside [today, horizon].
+ * `next_episode_to_air` is only one episode, and it is sometimes missing a date
+ * even when the season list already has air dates.
+ */
+function seasonsInWindow(
+  show: TmdbShowDetails,
+  today: string,
+  horizon: string,
+  includeSpecials: boolean,
+): number[] {
+  const known = new Set((show.seasons ?? []).map((season) => season.season_number));
+  const next = show.next_episode_to_air;
+  const nextAir = airDay(next?.air_date);
+
+  // That episode is the earliest one still to air. Past the window means
+  // nothing sooner will land in it.
+  if (nextAir && nextAir > horizon) return [];
+
+  const chosen = new Set<number>();
+  if (next) chosen.add(next.season_number);
+
+  if (!nextAir && show.status !== 'Ended' && show.status !== 'Canceled') {
+    const last = show.last_episode_to_air;
+    if (last) {
+      chosen.add(last.season_number);
+      chosen.add(last.season_number + 1);
+    }
+    for (const season of show.seasons ?? []) {
+      const premiere = airDay(season.air_date);
+      if (premiere && premiere >= today && premiere <= horizon) chosen.add(season.season_number);
+    }
+  }
+
+  return [...chosen].filter(
+    (seasonNumber) =>
+      (known.size === 0 || known.has(seasonNumber)) && (includeSpecials || seasonNumber > 0),
+  );
 }
 
 async function mapWithConcurrency<T, R>(
@@ -62,6 +124,50 @@ async function listUpcoming(userId: string, windowDays: number) {
   return data ?? [];
 }
 
+function freshnessKey(userId: string, windowDays: number): string {
+  return `${userId}:${windowDays}`;
+}
+
+/** True when the stored schedule still covers this window and this library. */
+async function snapshotIsFresh(userId: string, windowDays: number): Promise<boolean> {
+  const key = freshnessKey(userId, windowDays);
+  const db = supabaseUser();
+  const started = Date.now();
+  const { data: stamp, error } = await db
+    .from('upcoming_episodes')
+    .select('refreshed_at')
+    .eq('user_id', userId)
+    .order('refreshed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  logTiming('db', started, { table: 'upcoming_episodes', op: 'freshness', ok: !error });
+  if (error) throw new HttpError(500, error.message);
+
+  if (!stamp?.refreshed_at) {
+    const memory = emptySnapshotAt.get(key);
+    return Boolean(memory && Date.now() - memory < EMPTY_SNAPSHOT_MS);
+  }
+
+  const at = new Date(stamp.refreshed_at).getTime();
+  if (Number.isNaN(at) || Date.now() - at >= STALE_MS) return false;
+
+  const showStarted = Date.now();
+  const { data: show, error: showError } = await db
+    .from('tracked_media')
+    .select('updated_at')
+    .eq('user_id', userId)
+    .eq('media_type', 'tv')
+    .in('status', [...DEFAULT_STATUSES])
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  logTiming('db', showStarted, { table: 'tracked_media', op: 'freshness', ok: !showError });
+  if (showError) throw new HttpError(500, showError.message);
+  // Ignore writes from this refresh itself (episode counts bump updated_at) and small clock skew.
+  if (show?.updated_at && new Date(show.updated_at).getTime() > at + 60_000) return false;
+  return true;
+}
+
 export const handler = withHttp(async (event) => {
   const user = await verifySupabaseAuth(event);
   const body = parseBody<UpcomingRequest>(event);
@@ -76,16 +182,19 @@ export const handler = withHttp(async (event) => {
     .maybeSingle();
   logTiming('db', settingsStarted, { table: 'user_settings', op: 'select' });
 
-  const windowDays = body.windowDays ?? settings?.upcoming_window_days ?? 30;
+  const windowDays = clampWindow(body.windowDays ?? settings?.upcoming_window_days);
   const includeSpecials = settings?.include_specials ?? false;
 
-  if (action === 'list') {
+  // Opening the page only used to read the snapshot. That table stays empty
+  // until a refresh, so shows can have a next episode while Upcoming does not.
+  const rebuild = action === 'refresh' || !(await snapshotIsFresh(user.id, windowDays));
+  if (!rebuild) {
     enforceRateLimit(`upcoming-list:${user.id}`, 90);
     return json(200, { items: await listUpcoming(user.id, windowDays), refreshed: false });
   }
 
-  // refresh: re-derive the snapshot from TMDB for every followed show.
-  enforceRateLimit(`upcoming-refresh:${user.id}`, 12, 5 * 60_000);
+  if (action === 'refresh') enforceRateLimit(`upcoming-refresh:${user.id}`, 12, 5 * 60_000);
+  else enforceRateLimit(`upcoming-list:${user.id}`, 90);
 
   const statuses = body.statuses?.length ? body.statuses : [...DEFAULT_STATUSES];
   const showsStarted = Date.now();
@@ -108,25 +217,31 @@ export const handler = withHttp(async (event) => {
   await mapWithConcurrency(shows ?? [], CONCURRENCY, async (show) => {
     try {
       const details = await tmdb.show(show.tmdb_id, { fresh: true });
-      const next = details.next_episode_to_air;
-      if (!next?.air_date || next.air_date > horizon) return;
+      const seasonNumbers = seasonsInWindow(details, today, horizon, includeSpecials);
+      if (seasonNumbers.length === 0) return;
 
-      // TMDB only exposes one "next" episode, so pull that season to catch the
-      // rest of the episodes landing inside the window.
-      let episodes: TmdbEpisode[] = [next];
-      try {
-        const season = await tmdb.season(show.tmdb_id, next.season_number, { fresh: true });
-        episodes = season.episodes.filter(
-          (episode) =>
-            episode.air_date &&
-            episode.air_date >= today &&
-            episode.air_date <= horizon &&
-            (includeSpecials || episode.season_number > 0),
-        );
-        if (episodes.length === 0) episodes = [next];
-      } catch (error) {
-        console.warn(`Season fetch failed for show ${show.tmdb_id}`, error);
+      const next = details.next_episode_to_air;
+      const seen = new Set<string>();
+      let episodes: TmdbEpisode[] = [];
+      for (const seasonNumber of seasonNumbers) {
+        try {
+          const season = await tmdb.season(show.tmdb_id, seasonNumber, { fresh: true });
+          for (const episode of season.episodes) {
+            if (!inWindow(episode, today, horizon, includeSpecials)) continue;
+            const key = `${episode.season_number}:${episode.episode_number}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            episodes.push(episode);
+          }
+        } catch (error) {
+          console.warn(`Season fetch failed for show ${show.tmdb_id} season ${seasonNumber}`, error);
+        }
       }
+
+      if (episodes.length === 0 && next && inWindow(next, today, horizon, includeSpecials)) {
+        episodes = [next];
+      }
+      if (episodes.length === 0) return;
 
       for (const episode of episodes) {
         rows.push({
@@ -137,21 +252,21 @@ export const handler = withHttp(async (event) => {
           show_name: details.name ?? show.title,
           episode_name: episode.name,
           overview: episode.overview,
-          air_date: episode.air_date,
+          air_date: airDay(episode.air_date),
           poster_path: details.poster_path,
           still_path: episode.still_path,
-          refreshed_at: new Date().toISOString(),
+          refreshed_at: '',
         });
       }
 
-      // Keep total_episodes fresh while we already have the details payload.
       if (details.number_of_episodes) {
-        await db
+        const { error: totalsError } = await db
           .from('tracked_media')
           .update({ total_episodes: details.number_of_episodes })
           .eq('user_id', user.id)
           .eq('media_type', 'tv')
           .eq('tmdb_id', show.tmdb_id);
+        if (totalsError) console.warn(`Could not update episode count for show ${show.tmdb_id}`, totalsError.message);
       }
     } catch (error) {
       failures.push(show.tmdb_id);
@@ -160,24 +275,45 @@ export const handler = withHttp(async (event) => {
   });
   logTiming('tmdb-refresh', refreshStarted, {
     shows: shows?.length ?? 0,
+    episodes: rows.length,
     failures: failures.length,
   });
 
-  // Drop anything that already aired or was rescheduled out of the snapshot.
-  const deleteStarted = Date.now();
-  const { error: deleteError } = await db
-    .from('upcoming_episodes')
-    .delete()
-    .eq('user_id', user.id);
-  logTiming('db', deleteStarted, { table: 'upcoming_episodes', op: 'delete', ok: !deleteError });
-  if (deleteError) throw new HttpError(500, deleteError.message);
+  const followed = shows ?? [];
+  if (followed.length > 0 && failures.length === followed.length) {
+    throw new HttpError(502, 'Could not load upcoming episodes from TMDB');
+  }
+
+  // Stamp rows after the library writes above. Those writes bump updated_at, and
+  // the next page load treats a newer library change as a reason to refresh again.
+  const refreshedAt = new Date().toISOString();
+  for (const row of rows) row.refreshed_at = refreshedAt;
 
   if (rows.length > 0) {
+    const insertStarted = Date.now();
     const { error: insertError } = await db
       .from('upcoming_episodes')
       .upsert(rows, { onConflict: 'user_id,tmdb_show_id,season_number,episode_number' });
+    logTiming('db', insertStarted, { table: 'upcoming_episodes', op: 'upsert', ok: !insertError });
     if (insertError) throw new HttpError(500, insertError.message);
+  } else {
+    emptySnapshotAt.set(freshnessKey(user.id, windowDays), Date.now());
   }
+
+  // Remove episodes that fell out of the window. Newer rows from an overlapping
+  // refresh stay put, and a failed upsert above never wipes the previous schedule.
+  const deleteStarted = Date.now();
+  let removeStale = db
+    .from('upcoming_episodes')
+    .delete()
+    .eq('user_id', user.id)
+    .lt('refreshed_at', refreshedAt);
+  if (failures.length > 0) {
+    removeStale = removeStale.not('tmdb_show_id', 'in', `(${failures.join(',')})`);
+  }
+  const { error: deleteError } = await removeStale;
+  logTiming('db', deleteStarted, { table: 'upcoming_episodes', op: 'delete', ok: !deleteError });
+  if (deleteError) throw new HttpError(500, deleteError.message);
 
   return json(200, {
     items: await listUpcoming(user.id, windowDays),

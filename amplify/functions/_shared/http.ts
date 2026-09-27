@@ -70,7 +70,8 @@ export function withHttp(
     }
     try {
       const result = await handler(event);
-      logTiming('request', started, { ...fields, status: result.statusCode ?? 200 });
+      const status = typeof result === 'object' && result.statusCode ? result.statusCode : 200;
+      logTiming('request', started, { ...fields, status });
       return result;
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500;
