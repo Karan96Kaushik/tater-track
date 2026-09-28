@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,12 +10,21 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useSettings } from '@/hooks/useSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { mediaApi } from '@/lib/amplify/media-functions';
 
 export function SettingsPanel() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const { settings, loading, update } = useSettings();
   const [issue, setIssue] = useState('');
   const [checks, setChecks] = useState<Record<string, string> | null>(null);
@@ -113,6 +122,50 @@ export function SettingsPanel() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Account</CardTitle>
+          <CardDescription>Sign out of tater-track on this device.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11"
+            onClick={() => setConfirmSignOut(true)}
+          >
+            <LogOut />
+            Sign out
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={confirmSignOut} onOpenChange={setConfirmSignOut}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sign out?</DialogTitle>
+            <DialogDescription>
+              You will need to sign in again to see your library.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" className="min-h-11">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              className="min-h-11"
+              onClick={() => void signOut()}
+            >
+              Sign out
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
