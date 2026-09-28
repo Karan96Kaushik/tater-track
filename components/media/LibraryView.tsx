@@ -41,6 +41,13 @@ const SORTS: Array<{ value: SortKey; label: string }> = [
   { value: 'added', label: 'Recently added' },
 ];
 
+const STATUS_RANK: Record<TrackStatus, number> = {
+  watching: 0,
+  watchlist: 1,
+  completed: 2,
+  dropped: 3,
+};
+
 const SORT_KEY = 'tater-track:library-sort';
 const VIEW_KEY = 'tater-track:library-view';
 const PAGE_SIZE = 24;
@@ -74,18 +81,23 @@ function compareTitle(left: TrackedMedia, right: TrackedMedia) {
   return left.title.localeCompare(right.title, undefined, { sensitivity: 'base', numeric: true });
 }
 
-function sortItems(items: TrackedMedia[], sort: SortKey) {
-  const next = [...items];
-  if (sort === 'title') return next.sort(compareTitle);
-  if (sort === 'added') return next.sort((left, right) => right.created_at.localeCompare(left.created_at));
-  if (sort === 'progress') {
-    return next.sort((left, right) => progressRatio(right) - progressRatio(left) || compareTitle(left, right));
-  }
-  return next.sort((left, right) => {
-    if (!left.last_watched_at && !right.last_watched_at) return compareTitle(left, right);
-    if (!left.last_watched_at) return 1;
-    if (!right.last_watched_at) return -1;
-    return right.last_watched_at.localeCompare(left.last_watched_at) || compareTitle(left, right);
+function compareItems(left: TrackedMedia, right: TrackedMedia, sort: SortKey) {
+  if (sort === 'title') return compareTitle(left, right);
+  if (sort === 'added') return right.created_at.localeCompare(left.created_at);
+  if (sort === 'progress') return progressRatio(right) - progressRatio(left) || compareTitle(left, right);
+  if (!left.last_watched_at && !right.last_watched_at) return compareTitle(left, right);
+  if (!left.last_watched_at) return 1;
+  if (!right.last_watched_at) return -1;
+  return right.last_watched_at.localeCompare(left.last_watched_at) || compareTitle(left, right);
+}
+
+function sortItems(items: TrackedMedia[], sort: SortKey, groupByStatus: boolean) {
+  return [...items].sort((left, right) => {
+    if (groupByStatus) {
+      const statusDelta = STATUS_RANK[left.status] - STATUS_RANK[right.status];
+      if (statusDelta !== 0) return statusDelta;
+    }
+    return compareItems(left, right, sort);
   });
 }
 
@@ -133,7 +145,7 @@ export function LibraryView() {
   const { items, loading, error, syncItem } = useLibrary();
   const { settings } = useSettings();
   const includeSpecials = settings?.include_specials ?? false;
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('watching');
   const [sort, setSort] = useState<SortKey>(() => storedChoice(SORT_KEY, ['watched', 'title', 'progress', 'added'] as const, 'watched'));
   const [view, setView] = useState<ViewMode>(() => storedChoice(VIEW_KEY, ['grid', 'list'] as const, 'grid'));
   const [searchOpen, setSearchOpen] = useState(false);
@@ -180,7 +192,7 @@ export function LibraryView() {
       if (query && !item.title.toLowerCase().includes(query)) return false;
       return true;
     });
-    return sortItems(filtered, sort);
+    return sortItems(filtered, sort, filter === 'all');
   }, [items, filter, search, sort]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));

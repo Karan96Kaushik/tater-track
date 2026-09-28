@@ -73,6 +73,8 @@ export interface MediaDetails {
   } | null;
   seasons?: SeasonSummary[];
   episodes?: EpisodeDetail[];
+  /** Present when the request asked for several seasons at once. */
+  episodesBySeason?: Record<string, EpisodeDetail[]>;
   watchedEpisodeCount?: number;
   tracked: TrackedMedia | null;
 }
@@ -97,6 +99,7 @@ export const mediaApi = {
     tmdbId: number;
     mediaType: MediaType;
     seasonNumber?: number;
+    seasonNumbers?: number[];
     includeSpecials?: boolean;
   }) => callFunction<MediaDetails>('tmdbDetailsUrl', params, { auth: 'optional' }),
 

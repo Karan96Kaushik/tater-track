@@ -138,9 +138,9 @@ create table if not exists public.issue_reports (
 );
 
 -- ---------------------------------------------------------------------------
--- tmdb_cache: shared detail cache (movie, show, season). No policies, so the
--- publishable key cannot use it. Lambdas read and write it with the Supabase
--- secret key. Search responses are not stored here.
+-- tmdb_cache: shared detail cache (movie, show, season). The publishable key
+-- may select unexpired rows. Lambdas write it with the Supabase secret key.
+-- Search responses are not stored here.
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.tmdb_cache (
@@ -219,4 +219,9 @@ create policy issue_reports_owner_rw on public.issue_reports
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- tmdb_cache has RLS enabled and no policies. The publishable key cannot use it.
+-- Browser reads of unexpired TMDB payloads. Inserts and updates stay on the secret key.
+drop policy if exists tmdb_cache_read on public.tmdb_cache;
+create policy tmdb_cache_read on public.tmdb_cache
+  for select
+  to anon, authenticated
+  using (expires_at > now());

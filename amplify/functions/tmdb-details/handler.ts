@@ -10,6 +10,8 @@ interface DetailsRequest {
   mediaType?: 'movie' | 'tv';
   /** When set, the episode list for that season is included. */
   seasonNumber?: number;
+  /** Fill several seasons in one call. Used when the browser cache missed them. */
+  seasonNumbers?: number[];
   includeSpecials?: boolean;
 }
 
@@ -37,6 +39,44 @@ async function selectWatched(userId: string, tmdbId: number) {
   return data ?? [];
 }
 
+function parseSeasonNumbers(value: number[] | undefined): number[] | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 40) {
+    throw new HttpError(400, 'seasonNumbers must be a list of at most 40 seasons');
+  }
+  const numbers = [...new Set(value.map((item) => Number(item)))];
+  if (numbers.some((number) => !Number.isInteger(number) || number < 0 || number > 500)) {
+    throw new HttpError(400, 'Invalid season number');
+  }
+  return numbers;
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function toEpisodes(episodes: TmdbEpisode[], watchedKeys: Set<string>) {
+  return episodes.map((episode) => ({
+    seasonNumber: episode.season_number,
+    episodeNumber: episode.episode_number,
+    name: episode.name,
+    overview: episode.overview,
+    airDate: episode.air_date,
+    stillPath: episode.still_path,
+    watched: watchedKeys.has(`${episode.season_number}:${episode.episode_number}`),
+  }));
+}
+
 export const handler = withHttp(async (event) => {
   const user = await verifySupabaseAuthOptional(event);
   enforceRateLimit(
@@ -44,8 +84,9 @@ export const handler = withHttp(async (event) => {
     user ? 120 : 40,
   );
 
-  const { tmdbId, mediaType, seasonNumber, includeSpecials = false } =
-    parseBody<DetailsRequest>(event);
+  const body = parseBody<DetailsRequest>(event);
+  const { tmdbId, mediaType, seasonNumber, includeSpecials = false } = body;
+  const seasonNumbers = parseSeasonNumbers(body.seasonNumbers);
 
   if (!tmdbId || (mediaType !== 'movie' && mediaType !== 'tv')) {
     throw new HttpError(400, 'tmdbId and mediaType ("movie" | "tv") are required');
@@ -73,29 +114,42 @@ export const handler = withHttp(async (event) => {
     trackedPromise,
     tmdb.show(tmdbId),
     user ? selectWatched(user.id, tmdbId) : Promise.resolve([]),
-    seasonNumber !== undefined ? tmdb.season(tmdbId, seasonNumber) : Promise.resolve(null),
+    seasonNumbers === null && seasonNumber !== undefined
+      ? tmdb.season(tmdbId, seasonNumber)
+      : Promise.resolve(null),
   ]);
 
   const seasons = show.seasons.filter((s) => includeSpecials || s.season_number > 0);
+  const watchedKeys = new Set(watched.map((w) => `${w.season_number}:${w.episode_number}`));
+  const episodesBySeason: Record<string, ReturnType<typeof toEpisodes>> = {};
+
+  if (seasonNumbers) {
+    const loaded = await mapLimit(seasonNumbers, 4, async (number) => {
+      try {
+        const payload = await tmdb.season(tmdbId, number);
+        return { number, episodes: toEpisodes(payload.episodes, watchedKeys) };
+      } catch (error) {
+        console.warn(`Season fetch failed for show ${tmdbId} season ${number}`, error);
+        return null;
+      }
+    });
+    for (const entry of loaded) {
+      if (entry) episodesBySeason[String(entry.number)] = entry.episodes;
+    }
+  }
+
   let seasonPayload = season;
-  if (!seasonPayload && seasons[0]) {
+  if (!seasonNumbers && !seasonPayload && seasons[0]) {
     try {
       seasonPayload = await tmdb.season(tmdbId, seasons[0].season_number);
     } catch (error) {
       console.warn(`Default season fetch failed for show ${tmdbId}`, error);
     }
   }
-  const watchedKeys = new Set(watched.map((w) => `${w.season_number}:${w.episode_number}`));
 
-  const episodes = (seasonPayload?.episodes ?? []).map((episode: TmdbEpisode) => ({
-    seasonNumber: episode.season_number,
-    episodeNumber: episode.episode_number,
-    name: episode.name,
-    overview: episode.overview,
-    airDate: episode.air_date,
-    stillPath: episode.still_path,
-    watched: watchedKeys.has(`${episode.season_number}:${episode.episode_number}`),
-  }));
+  const episodes = seasonPayload
+    ? toEpisodes(seasonPayload.episodes, watchedKeys)
+    : (episodesBySeason[String(seasonNumbers?.[0])] ?? []);
 
   return json(200, {
     mediaType,
@@ -117,6 +171,7 @@ export const handler = withHttp(async (event) => {
       airDate: s.air_date,
     })),
     episodes,
+    ...(seasonNumbers ? { episodesBySeason } : {}),
     watchedEpisodeCount: watchedKeys.size,
     tracked: tracked ?? null,
   });

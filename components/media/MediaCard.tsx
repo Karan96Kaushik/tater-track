@@ -1,4 +1,4 @@
-import { Film, Tv } from 'lucide-react';
+import { Check, Film, Tv } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn, posterUrl } from '@/lib/utils';
 import type { MediaType, TrackStatus } from '@/lib/supabase/types';
@@ -129,8 +129,8 @@ export function MediaCard({
       }}
       className="z-10 flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-60"
     >
-      <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground shadow-md shadow-black/30">
-        +1
+      <span className="flex size-7 items-center justify-center rounded-full border-2 border-primary bg-black/45 text-primary shadow-md shadow-black/30 backdrop-blur-md">
+        <Check className="size-3.5" strokeWidth={2.5} />
       </span>
     </button>
   ) : null;

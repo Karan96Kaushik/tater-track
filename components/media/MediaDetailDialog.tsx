@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CalendarClock, Sparkles, Star, Trash2 } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { SeasonEpisodes } from '@/components/media/SeasonEpisodes';
 import { mediaApi, type EpisodeDetail, type MediaDetails } from '@/lib/amplify/media-functions';
+import { ensureSeasons, listWatchedKeys, loadMediaDetails } from '@/lib/tmdb/details';
 import type { MediaType, TrackStatus } from '@/lib/supabase/types';
 import { setEpisodesWatched as saveEpisodesWatched, setSeasonWatched } from '@/lib/supabase/watch-progress';
 import { useAuth } from '@/hooks/useAuth';
@@ -50,38 +51,135 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
   const [season, setSeason] = useState<number | null>(null);
   const [pendingEpisode, setPendingEpisode] = useState<string | null>(null);
   const [pendingBulk, setPendingBulk] = useState(false);
+  const requestRef = useRef(0);
+  const episodesRef = useRef<Record<number, EpisodeDetail[]>>({});
+  const watchedRef = useRef<Set<string>>(new Set());
+  const seasonRef = useRef<number | null>(null);
+  const seasonLoadRef = useRef(0);
 
   const tracked = target ? entryFor(target.tmdbId, target.mediaType) : undefined;
 
-  const load = useCallback(
-    async (seasonNumber?: number) => {
+  const stamp = useCallback(
+    (episodes: EpisodeDetail[]) =>
+      episodes.map((episode) => ({
+        ...episode,
+        watched: watchedRef.current.has(`${episode.seasonNumber}:${episode.episodeNumber}`),
+      })),
+    [],
+  );
+
+  const commitSeason = useCallback((seasonNumber: number, episodes: EpisodeDetail[]) => {
+    episodesRef.current = { ...episodesRef.current, [seasonNumber]: episodes };
+    if (seasonRef.current !== seasonNumber) return;
+    setDetails((current) => (current ? { ...current, episodes } : current));
+  }, []);
+
+  const showSeason = useCallback(
+    async (nextSeason: number) => {
       if (!target) return;
+      const requestId = requestRef.current;
+      const loadId = ++seasonLoadRef.current;
+      seasonRef.current = nextSeason;
+      setSeason(nextSeason);
+      const ready = episodesRef.current[nextSeason];
+      if (ready) {
+        setDetails((current) => (current ? { ...current, episodes: ready } : current));
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        const data = await mediaApi.details({
+        const loaded = await ensureSeasons({
           tmdbId: target.tmdbId,
-          mediaType: target.mediaType,
-          seasonNumber,
+          seasonNumbers: [nextSeason],
+          userId: user?.id ?? null,
         });
-        setDetails(data);
-        if (seasonNumber === undefined && data.mediaType === 'tv') {
-          const first = data.episodes?.[0]?.seasonNumber ?? data.seasons?.[0]?.seasonNumber;
-          if (first !== undefined) setSeason(first);
+        if (requestRef.current !== requestId || seasonLoadRef.current !== loadId) {
+          const episodes = loaded.get(nextSeason);
+          if (episodes) episodesRef.current = { ...episodesRef.current, [nextSeason]: stamp(episodes) };
+          return;
         }
+        if (!loaded.has(nextSeason)) throw new Error('Could not load this season');
+        commitSeason(nextSeason, stamp(loaded.get(nextSeason) ?? []));
       } catch (cause) {
-        toast.error('Could not load details', { description: (cause as Error).message });
+        if (requestRef.current !== requestId || seasonLoadRef.current !== loadId) return;
+        toast.error('Could not load this season', { description: (cause as Error).message });
       } finally {
-        setLoading(false);
+        if (requestRef.current === requestId && seasonLoadRef.current === loadId) setLoading(false);
       }
     },
-    [target],
+    [target, user?.id, commitSeason, stamp],
   );
 
   useEffect(() => {
     setDetails(null);
     setSeason(null);
-    if (target) void load();
-  }, [target, load]);
+    episodesRef.current = {};
+    watchedRef.current = new Set();
+    seasonRef.current = null;
+    seasonLoadRef.current += 1;
+    if (!target) return;
+
+    const requestId = ++requestRef.current;
+    setLoading(true);
+
+    void (async () => {
+      try {
+        const [data, keys] = await Promise.all([
+          loadMediaDetails({
+            tmdbId: target.tmdbId,
+            mediaType: target.mediaType,
+            userId: user?.id ?? null,
+          }),
+          target.mediaType === 'tv' && user
+            ? listWatchedKeys(target.tmdbId, user.id)
+            : Promise.resolve(new Set<string>()),
+        ]);
+        if (requestRef.current !== requestId) return;
+
+        watchedRef.current = keys;
+        const first = data.episodes?.[0]?.seasonNumber ?? data.seasons?.[0]?.seasonNumber;
+        const firstEpisodes = data.mediaType === 'tv' ? stamp(data.episodes ?? []) : data.episodes;
+        if (data.mediaType === 'tv' && first !== undefined) {
+          episodesRef.current = { [first]: firstEpisodes ?? [] };
+          seasonRef.current = first;
+          setSeason(first);
+        }
+        setDetails({ ...data, episodes: firstEpisodes });
+        setLoading(false);
+
+        if (data.mediaType !== 'tv' || first === undefined) return;
+        const rest = (data.seasons ?? [])
+          .map((entry) => entry.seasonNumber)
+          .filter((seasonNumber) => seasonNumber !== first);
+        if (rest.length === 0) return;
+
+        const loaded = await ensureSeasons({
+          tmdbId: target.tmdbId,
+          seasonNumbers: rest,
+          userId: user?.id ?? null,
+        });
+        if (requestRef.current !== requestId) return;
+        const additions: Record<number, EpisodeDetail[]> = {};
+        for (const [seasonNumber, episodes] of loaded) {
+          if (episodesRef.current[seasonNumber]) continue;
+          additions[seasonNumber] = stamp(episodes);
+        }
+        episodesRef.current = { ...additions, ...episodesRef.current };
+        setDetails((current) => {
+          const visibleSeason = seasonRef.current;
+          if (!current || visibleSeason === null) return current;
+          const visible = episodesRef.current[visibleSeason];
+          return visible ? { ...current, episodes: visible } : current;
+        });
+      } catch (cause) {
+        if (requestRef.current !== requestId) return;
+        toast.error('Could not load details', { description: (cause as Error).message });
+        setLoading(false);
+      }
+    })();
+  }, [target, user?.id, stamp]);
 
   function showSnapshot(current: MediaDetails) {
     return {
@@ -96,17 +194,19 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
 
   function paintEpisodes(seasonNumber: number, episodeNumbers: number[], watched: boolean) {
     const marked = new Set(episodeNumbers);
-    setDetails((current) =>
-      current
-        ? {
-            ...current,
-            episodes: current.episodes?.map((episode) =>
-              episode.seasonNumber === seasonNumber && marked.has(episode.episodeNumber)
-                ? { ...episode, watched }
-                : episode,
-            ),
-          }
-        : current,
+    for (const episodeNumber of episodeNumbers) {
+      const key = `${seasonNumber}:${episodeNumber}`;
+      if (watched) watchedRef.current.add(key);
+      else watchedRef.current.delete(key);
+    }
+    const current = episodesRef.current[seasonNumber] ?? details?.episodes ?? [];
+    commitSeason(
+      seasonNumber,
+      current.map((episode) =>
+        episode.seasonNumber === seasonNumber && marked.has(episode.episodeNumber)
+          ? { ...episode, watched }
+          : episode,
+      ),
     );
   }
 
@@ -119,6 +219,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
     if (episodes.length !== episodeNumbers.length) return;
 
     const previousEpisodes = details.episodes;
+    const previousKeys = new Set(watchedRef.current);
     setPendingEpisode(`${seasonNumber}:${episodeNumbers[episodeNumbers.length - 1]}`);
     paintEpisodes(seasonNumber, episodeNumbers, watched);
     try {
@@ -139,7 +240,8 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
         toast.success(`Marked ${episodeNumbers.length} episodes as watched`);
       }
     } catch (cause) {
-      setDetails((current) => (current ? { ...current, episodes: previousEpisodes } : current));
+      watchedRef.current = previousKeys;
+      if (previousEpisodes) commitSeason(seasonNumber, previousEpisodes);
       toast.error('Could not update progress', { description: (cause as Error).message });
       throw cause;
     } finally {
@@ -160,6 +262,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
       ? seasonEpisodes.filter((episode) => episode.airDate && episode.airDate <= today)
       : seasonEpisodes;
     const previousEpisodes = details.episodes;
+    const previousKeys = new Set(watchedRef.current);
     setPendingBulk(true);
     paintEpisodes(
       season,
@@ -182,7 +285,8 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
         watched && !tracked ? 'Added to your library' : watched ? 'Season marked as watched' : 'Season cleared',
       );
     } catch (cause) {
-      setDetails((current) => (current ? { ...current, episodes: previousEpisodes } : current));
+      watchedRef.current = previousKeys;
+      if (previousEpisodes) commitSeason(season, previousEpisodes);
       toast.error('Could not update the season', { description: (cause as Error).message });
     } finally {
       setPendingBulk(false);
@@ -194,7 +298,22 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
     setPendingBulk(true);
     try {
       const result = await mediaApi.setShowWatched({ tmdbId: target.tmdbId });
-      await Promise.all([season === null ? Promise.resolve() : load(season), refresh()]);
+      watchedRef.current = await listWatchedKeys(target.tmdbId, user?.id ?? null);
+      const next = { ...episodesRef.current };
+      for (const [seasonNumber, episodes] of Object.entries(next)) {
+        next[Number(seasonNumber)] = stamp(episodes);
+      }
+      episodesRef.current = next;
+      setDetails((current) => {
+        if (!current) return current;
+        const visible = seasonRef.current !== null ? next[seasonRef.current] : current.episodes;
+        return {
+          ...current,
+          episodes: visible ?? current.episodes,
+          watchedEpisodeCount: watchedRef.current.size,
+        };
+      });
+      await refresh();
       toast.success(
         result.marked === 0
           ? 'No aired episodes to mark'
@@ -365,8 +484,7 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
                 canTrack={canTrack}
                 saving={pendingEpisode !== null || pendingBulk}
                 onSeasonChange={(next) => {
-                  setSeason(next);
-                  void load(next);
+                  void showSeason(next);
                 }}
                 onMarkSeason={(watched) => void markSeason(watched)}
                 onMarkShow={markShow}

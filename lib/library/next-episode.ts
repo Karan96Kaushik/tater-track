@@ -1,4 +1,4 @@
-import { mediaApi } from '@/lib/amplify/media-functions';
+import { ensureSeasons, loadMediaDetails } from '@/lib/tmdb/details';
 
 export interface NextEpisodeRef {
   seasonNumber: number;
@@ -62,7 +62,7 @@ export function resolveNextEpisode(
 }
 
 async function walkSeasons(tmdbId: number, includeSpecials: boolean): Promise<NextEpisodeRef | null> {
-  const overview = await mediaApi.details({ tmdbId, mediaType: 'tv', includeSpecials });
+  const overview = await loadMediaDetails({ tmdbId, mediaType: 'tv', includeSpecials });
   const seasons = [...(overview.seasons ?? [])].sort((left, right) => left.seasonNumber - right.seasonNumber);
   const preloadedSeason = overview.episodes?.[0]?.seasonNumber;
 
@@ -70,14 +70,9 @@ async function walkSeasons(tmdbId: number, includeSpecials: boolean): Promise<Ne
     const episodes =
       season.seasonNumber === preloadedSeason
         ? (overview.episodes ?? [])
-        : ((
-            await mediaApi.details({
-              tmdbId,
-              mediaType: 'tv',
-              seasonNumber: season.seasonNumber,
-              includeSpecials,
-            })
-          ).episodes ?? []);
+        : ((await ensureSeasons({ tmdbId, seasonNumbers: [season.seasonNumber], includeSpecials })).get(
+            season.seasonNumber,
+          ) ?? []);
 
     const next = [...episodes]
       .sort((left, right) => left.episodeNumber - right.episodeNumber)
