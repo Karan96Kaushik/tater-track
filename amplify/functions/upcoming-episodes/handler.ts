@@ -47,9 +47,14 @@ function airDay(value: string | null | undefined): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 }
 
-function inWindow(episode: TmdbEpisode, today: string, horizon: string, includeSpecials: boolean): boolean {
+function inSchedule(
+  episode: TmdbEpisode,
+  start: string,
+  end: string,
+  includeSpecials: boolean,
+): boolean {
   const air = airDay(episode.air_date);
-  return Boolean(air && air >= today && air <= horizon && (includeSpecials || episode.season_number > 0));
+  return Boolean(air && air >= start && air <= end && (includeSpecials || episode.season_number > 0));
 }
 
 /**
@@ -92,6 +97,31 @@ function seasonsInWindow(
   );
 }
 
+/** Future window, plus the season of the last episode if it aired inside the lookback. */
+function seasonsForSchedule(
+  show: TmdbShowDetails,
+  lookback: string,
+  today: string,
+  horizon: string,
+  includeSpecials: boolean,
+): number[] {
+  const chosen = new Set(seasonsInWindow(show, today, horizon, includeSpecials));
+  const last = show.last_episode_to_air;
+  const lastAir = airDay(last?.air_date);
+  const known = new Set((show.seasons ?? []).map((season) => season.season_number));
+  if (
+    last &&
+    lastAir &&
+    lastAir >= lookback &&
+    lastAir < today &&
+    (includeSpecials || last.season_number > 0) &&
+    (known.size === 0 || known.has(last.season_number))
+  ) {
+    chosen.add(last.season_number);
+  }
+  return [...chosen];
+}
+
 async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
@@ -110,7 +140,7 @@ async function listUpcoming(userId: string, windowDays: number) {
     .from('upcoming_episodes')
     .select('*')
     .eq('user_id', userId)
-    .gte('air_date', dayString(0))
+    .gte('air_date', dayString(-windowDays))
     .lte('air_date', dayString(windowDays))
     .order('air_date', { ascending: true });
 
@@ -161,6 +191,7 @@ export const handler = withHttp(async (event) => {
 
   const horizon = dayString(windowDays);
   const today = dayString(0);
+  const lookback = dayString(-windowDays);
   const rows: UpcomingRow[] = [];
   const failures: number[] = [];
 
@@ -168,7 +199,7 @@ export const handler = withHttp(async (event) => {
   await mapWithConcurrency(shows ?? [], CONCURRENCY, async (show) => {
     try {
       const details = await tmdb.show(show.tmdb_id, { fresh: true });
-      const seasonNumbers = seasonsInWindow(details, today, horizon, includeSpecials);
+      const seasonNumbers = seasonsForSchedule(details, lookback, today, horizon, includeSpecials);
       if (seasonNumbers.length === 0) return;
 
       const next = details.next_episode_to_air;
@@ -178,7 +209,7 @@ export const handler = withHttp(async (event) => {
         try {
           const season = await tmdb.season(show.tmdb_id, seasonNumber, { fresh: true });
           for (const episode of season.episodes) {
-            if (!inWindow(episode, today, horizon, includeSpecials)) continue;
+            if (!inSchedule(episode, lookback, horizon, includeSpecials)) continue;
             const key = `${episode.season_number}:${episode.episode_number}`;
             if (seen.has(key)) continue;
             seen.add(key);
@@ -189,7 +220,7 @@ export const handler = withHttp(async (event) => {
         }
       }
 
-      if (episodes.length === 0 && next && inWindow(next, today, horizon, includeSpecials)) {
+      if (episodes.length === 0 && next && inSchedule(next, today, horizon, includeSpecials)) {
         episodes = [next];
       }
       if (episodes.length === 0) return;

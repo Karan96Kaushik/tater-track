@@ -495,7 +495,7 @@ export function LibraryView() {
             ))}
           </div>
         ) : (
-          <StatsRow items={items} activeFilter={filter} dense={statsCompact} onFilter={setFilter} />
+          <StatsRow items={items} dense={statsCompact} onFilter={setFilter} />
         )}
       </div>
 

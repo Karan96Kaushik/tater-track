@@ -14,12 +14,10 @@ interface Stat {
 
 export function StatsRow({
   items,
-  activeFilter,
   dense = false,
   onFilter,
 }: {
   items: TrackedMedia[];
-  activeFilter: LibraryFilter;
   dense?: boolean;
   onFilter: (filter: LibraryFilter) => void;
 }) {
@@ -43,15 +41,10 @@ export function StatsRow({
   return (
     <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {stats.map((stat) => {
-        const selected = stat.filter !== undefined && stat.filter === activeFilter;
         const label = `${stat.label}, ${numberFormat.format(stat.value)}`;
         const className = cn(
-          'flex min-h-11 min-w-[7.25rem] flex-1 flex-col items-start justify-center rounded-2xl px-3 text-left ring-1 transition-colors',
+          'flex min-h-11 min-w-[7.25rem] flex-1 flex-col items-start justify-center rounded-2xl bg-card/80 px-3 text-left text-foreground ring-1 ring-border',
           dense ? 'py-1.5' : 'py-2',
-          selected
-            ? 'bg-primary/15 text-foreground ring-primary/40'
-            : 'bg-card/80 text-foreground ring-border',
-          stat.filter && 'hover:ring-primary/30',
         );
         const body = (
           <>
@@ -81,7 +74,6 @@ export function StatsRow({
           <button
             key={stat.label}
             type="button"
-            aria-pressed={selected}
             aria-label={label}
             onClick={() => onFilter(stat.filter!)}
             className={className}
