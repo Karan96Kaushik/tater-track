@@ -235,7 +235,7 @@ export function SeasonEpisodes({
         </div>
       )}
 
-      <div ref={listRef} className="max-h-80 space-y-1 overflow-y-auto pr-1">
+      <div ref={listRef} className="max-h-80 space-y-1 overflow-x-hidden overflow-y-auto pr-1">
         {catchUp && (
           <div className="sticky top-0 z-10 mb-2 rounded-2xl bg-card p-3 shadow-lg shadow-black/20 ring-1 ring-primary/30">
             <p className="text-sm font-medium">Mark earlier episodes?</p>
@@ -270,7 +270,7 @@ export function SeasonEpisodes({
                   aria-pressed={canTrack ? episode.watched : undefined}
                   onClick={() => onEpisode(episode)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors',
+                    'flex w-full min-w-0 items-start gap-3 rounded-2xl px-2 py-2 text-left transition-colors',
                     canTrack && !unaired && 'hover:bg-muted/70',
                     episode.watched && 'bg-primary/8',
                     prompted && 'bg-primary/12 ring-1 ring-primary/40',
@@ -293,7 +293,12 @@ export function SeasonEpisodes({
                   <span className="w-6 shrink-0 text-xs tabular-nums text-muted-foreground">
                     {episode.episodeNumber}
                   </span>
-                  <span className={cn('min-w-0 flex-1 truncate text-sm', episode.watched && 'text-muted-foreground')}>
+                  <span
+                    className={cn(
+                      'min-w-0 flex-1 whitespace-normal break-words text-sm leading-snug',
+                      episode.watched && 'text-muted-foreground',
+                    )}
+                  >
                     {episode.name ?? 'Untitled'}
                   </span>
                   <span className="shrink-0 text-right text-[11px] leading-tight text-muted-foreground">
