@@ -7,12 +7,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaCard } from '@/components/media/MediaCard';
 import { MediaDetailDialog } from '@/components/media/MediaDetailDialog';
-import { mediaApi, type BrowseKind, type Genre, type SearchHit } from '@/lib/amplify/media-functions';
+import { mediaApi, type BrowseKind, type Genre, type SearchHit, type SimilarShow } from '@/lib/amplify/media-functions';
 import { areFunctionsConfigured } from '@/lib/amplify/client';
 import type { MediaType } from '@/lib/supabase/types';
 import { useLibrary } from '@/hooks/useLibrary';
 import { useSettings } from '@/hooks/useSettings';
-import { cn } from '@/lib/utils';
+import { cn, posterUrl } from '@/lib/utils';
 
 type Filter = 'multi' | 'movie' | 'tv';
 type CategoryId = 'trending' | 'popular' | 'top_rated' | 'now_playing' | 'upcoming' | 'on_the_air';
@@ -49,6 +49,7 @@ const CATEGORIES: Array<{
 ];
 
 const browseCache = new Map<string, SearchHit[]>();
+const similarCache = new Map<string, SimilarShow[]>();
 const genreCache = new Map<MediaType, Genre[]>();
 
 function categoryVisible(id: CategoryId, filter: Filter) {
@@ -67,6 +68,7 @@ export function DiscoverView() {
   const [similar, setSimilar] = useState<SimilarPick | null>(requested ?? null);
   const [genres, setGenres] = useState<GenrePick[]>([]);
   const [results, setResults] = useState<SearchHit[]>([]);
+  const [suggestions, setSuggestions] = useState<SimilarShow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ tmdbId: number; mediaType: MediaType } | null>(null);
@@ -75,13 +77,14 @@ export function DiscoverView() {
   const searching = query.trim().length > 0;
 
   useEffect(() => {
-    if (requested) {
+    if (requested?.mediaType === 'tv') {
       setQuery('');
       setGenre(null);
       setSimilar(requested);
       return;
     }
     setSimilar(null);
+    setSuggestions([]);
   }, [location.key, requested]);
 
   useEffect(() => {
@@ -121,16 +124,49 @@ export function DiscoverView() {
   }, [filter]);
 
   useEffect(() => {
-    if (!areFunctionsConfigured) return;
+    if (!areFunctionsConfigured || !similar || similar.mediaType !== 'tv') return;
+
+    const cacheKey = `${similar.tmdbId}:${similar.at}`;
+    const cached = similarCache.get(cacheKey);
+    if (cached) {
+      setSuggestions(cached);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSuggestions([]);
+    setLoading(true);
+    setError(null);
+
+    void (async () => {
+      try {
+        const response = await mediaApi.findSimilar({ tmdbId: similar.tmdbId });
+        if (cancelled) return;
+        setSuggestions(response.shows);
+        similarCache.set(cacheKey, response.shows);
+      } catch (cause) {
+        if (!cancelled) setError((cause as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [similar]);
+
+  useEffect(() => {
+    if (!areFunctionsConfigured || similar) return;
 
     const trimmed = query.trim();
     const cacheKey = trimmed
       ? ''
-      : similar
-        ? `similar:${similar.mediaType}:${similar.tmdbId}`
-        : genre
-          ? `genre:${genre.mediaType}:${genre.id}`
-          : `${category}:${filter}:${category === 'now_playing' || category === 'upcoming' ? region : ''}`;
+      : genre
+        ? `genre:${genre.mediaType}:${genre.id}`
+        : `${category}:${filter}:${category === 'now_playing' || category === 'upcoming' ? region : ''}`;
 
     if (!trimmed) {
       const cached = browseCache.get(cacheKey);
@@ -149,14 +185,8 @@ export function DiscoverView() {
       try {
         const response = trimmed
           ? await mediaApi.search({ query: trimmed, mediaType: filter })
-          : similar
+          : genre
             ? await mediaApi.browse({
-                browse: 'similar',
-                mediaType: similar.mediaType,
-                tmdbId: similar.tmdbId,
-              })
-            : genre
-              ? await mediaApi.browse({
                   browse: 'genre',
                   mediaType: genre.mediaType,
                   genreId: genre.id,
@@ -229,7 +259,13 @@ export function DiscoverView() {
           <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              if (event.target.value.trim()) {
+                setSimilar(null);
+                setSuggestions([]);
+              }
+            }}
             placeholder="Search movies and TV shows"
             className="h-12 rounded-2xl pl-11"
           />
@@ -280,6 +316,39 @@ export function DiscoverView() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      {similar ? (
+        <div className="space-y-3">
+          {loading && suggestions.length === 0
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-24 w-full rounded-2xl" />
+              ))
+            : suggestions.map((show) => {
+                const poster = posterUrl(show.posterPath);
+                return (
+                  <button
+                    key={show.tmdbId}
+                    type="button"
+                    onClick={() => setSelected({ tmdbId: show.tmdbId, mediaType: 'tv' })}
+                    className="flex w-full gap-4 rounded-2xl bg-card/40 p-3 text-left ring-1 ring-border transition-colors hover:bg-accent"
+                  >
+                    {poster ? (
+                      <img
+                        src={poster}
+                        alt=""
+                        className="h-24 w-16 shrink-0 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="h-24 w-16 shrink-0 rounded-xl bg-muted" />
+                    )}
+                    <span className="min-w-0 space-y-1">
+                      <span className="block font-medium leading-snug">{show.title}</span>
+                      <span className="block text-sm leading-snug text-muted-foreground">{show.reason}</span>
+                    </span>
+                  </button>
+                );
+              })}
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {loading && results.length === 0
           ? Array.from({ length: 12 }).map((_, index) => (
@@ -300,10 +369,11 @@ export function DiscoverView() {
               );
             })}
       </div>
+      )}
 
-      {!loading && results.length === 0 && !error && (
+      {!loading && !error && (similar ? suggestions.length === 0 : results.length === 0) && (
         <p className="py-16 text-center font-display text-lg text-muted-foreground">
-          {searching ? 'Nothing found.' : 'Nothing in this list.'}
+          {similar ? 'No similar shows came back.' : searching ? 'Nothing found.' : 'Nothing in this list.'}
         </p>
       )}
 

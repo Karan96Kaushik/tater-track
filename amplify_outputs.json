@@ -7,6 +7,7 @@
     "upcomingEpisodesUrl": "https://f7i3d7oklronabjxxkv5vfdvdm0gvfsx.lambda-url.ap-south-1.on.aws/",
     "reportIssueUrl": "https://7dhghuqx5eocfa5zwmvd6xei5u0jzqjt.lambda-url.ap-south-1.on.aws/",
     "amplifyTestUrl": "https://c42lbovoo4mintxs3zygpvk7km0hrgru.lambda-url.ap-south-1.on.aws/",
-    "aiChatUrl": "https://wq23fz2twofbzoronaoh74trj40tatud.lambda-url.ap-south-1.on.aws/"
+    "aiChatUrl": "https://wq23fz2twofbzoronaoh74trj40tatud.lambda-url.ap-south-1.on.aws/",
+    "findSimilarUrl": "https://g6ubymuneyrl5iircd4ierxga40bmhjr.lambda-url.ap-south-1.on.aws/"
   }
 }

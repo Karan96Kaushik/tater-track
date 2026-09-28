@@ -25,4 +25,11 @@ export const env = {
   get tmdbAccessToken() {
     return requireEnv('TMDB_ACCESS_TOKEN');
   },
+  get groqApiKey() {
+    return requireEnv('GROQ_API_KEY');
+  },
+  /** Override with `GROQ_MODEL`. Defaults to Groq's GPT-OSS 120B. */
+  get groqModel() {
+    return process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-120b';
+  },
 };

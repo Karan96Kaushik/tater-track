@@ -19,8 +19,20 @@ export type BrowseKind =
   | 'now_playing'
   | 'upcoming'
   | 'on_the_air'
-  | 'genre'
-  | 'similar';
+  | 'genre';
+
+export interface SimilarShow {
+  tmdbId: number;
+  title: string;
+  reason: string;
+  posterPath: string | null;
+  releaseDate: string | null;
+}
+
+export interface SimilarShowsResponse {
+  source: { tmdbId: number; title: string };
+  shows: SimilarShow[];
+}
 
 export interface Genre {
   id: number;
@@ -83,12 +95,14 @@ export const mediaApi = {
   search: (params: { query: string; mediaType?: MediaType | 'multi'; page?: number }) =>
     callFunction<SearchResponse>('tmdbSearchUrl', params, { auth: 'optional' }),
 
+  findSimilar: (params: { tmdbId: number }) =>
+    callFunction<SimilarShowsResponse>('findSimilarUrl', params),
+
   browse: (params: {
     browse: BrowseKind;
     mediaType?: MediaType | 'multi';
     page?: number;
     genreId?: number;
-    tmdbId?: number;
     region?: string;
   }) => callFunction<SearchResponse>('tmdbSearchUrl', params, { auth: 'optional' }),
 

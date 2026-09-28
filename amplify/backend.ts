@@ -2,6 +2,7 @@ import './loadEnv.js';
 import { defineBackend } from '@aws-amplify/backend';
 import { FunctionUrlAuthType, HttpMethod } from 'aws-cdk-lib/aws-lambda';
 import { aiChat } from './functions/ai-chat/resource.js';
+import { findSimilar } from './functions/find-similar/resource.js';
 import { reportIssue } from './functions/report-issue/resource.js';
 import { amplifyTest } from './functions/test/resource.js';
 import { tmdbDetails } from './functions/tmdb-details/resource.js';
@@ -22,6 +23,7 @@ const backend = defineBackend({
   reportIssue,
   amplifyTest,
   aiChat,
+  findSimilar,
 });
 
 const functions = {
@@ -32,6 +34,7 @@ const functions = {
   reportIssueUrl: backend.reportIssue,
   amplifyTestUrl: backend.amplifyTest,
   aiChatUrl: backend.aiChat,
+  findSimilarUrl: backend.findSimilar,
 } as const;
 
 const custom: Record<string, string> = {};

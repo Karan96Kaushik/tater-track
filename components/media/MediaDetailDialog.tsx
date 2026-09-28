@@ -379,28 +379,30 @@ export function MediaDetailDialog({ target, onOpenChange }: MediaDetailDialogPro
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (!target) return;
-                  onOpenChange(false);
-                  navigate('/discover', {
-                    state: {
-                      similar: {
-                        tmdbId: target.tmdbId,
-                        mediaType: target.mediaType,
-                        title: details.title,
-                        at: Date.now(),
+            {details.mediaType === 'tv' && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (!target) return;
+                    onOpenChange(false);
+                    navigate('/discover', {
+                      state: {
+                        similar: {
+                          tmdbId: target.tmdbId,
+                          mediaType: target.mediaType,
+                          title: details.title,
+                          at: Date.now(),
+                        },
                       },
-                    },
-                  });
-                }}
-              >
-                <Sparkles className="size-4" /> Find similar
-              </Button>
-            </div>
+                    });
+                  }}
+                >
+                  <Sparkles className="size-4" /> Find similar
+                </Button>
+              </div>
+            )}
 
             {canTrack ? (
               <div className="flex flex-wrap gap-2">

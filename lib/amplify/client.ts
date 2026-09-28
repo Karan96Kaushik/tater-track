@@ -8,7 +8,8 @@ type FunctionKey =
   | 'upcomingEpisodesUrl'
   | 'reportIssueUrl'
   | 'amplifyTestUrl'
-  | 'aiChatUrl';
+  | 'aiChatUrl'
+  | 'findSimilarUrl';
 
 const custom = (amplifyOutputs as { custom?: Partial<Record<FunctionKey, string>> }).custom ?? {};
 

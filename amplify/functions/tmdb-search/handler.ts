@@ -11,7 +11,6 @@ type Browse =
   | 'upcoming'
   | 'on_the_air'
   | 'genre'
-  | 'similar'
   | 'genres';
 
 interface SearchRequest {
@@ -20,7 +19,6 @@ interface SearchRequest {
   page?: number;
   browse?: Browse;
   genreId?: number;
-  tmdbId?: number;
   region?: string;
 }
 
@@ -145,17 +143,6 @@ async function browseCatalog(body: SearchRequest, mediaType: 'movie' | 'tv' | 'm
       throw new HttpError(400, 'genreId is required');
     }
     const listed = await tmdb.discoverGenre(mediaType, body.genreId, page);
-    return { page: listed.page, totalPages: listed.total_pages, results: hits(listed.results, mediaType) };
-  }
-
-  if (browse === 'similar') {
-    if (mediaType !== 'movie' && mediaType !== 'tv') {
-      throw new HttpError(400, 'Similar titles need mediaType "movie" or "tv"');
-    }
-    if (!body.tmdbId || !Number.isInteger(body.tmdbId) || body.tmdbId <= 0) {
-      throw new HttpError(400, 'tmdbId is required');
-    }
-    const listed = await tmdb.similar(mediaType, body.tmdbId, page);
     return { page: listed.page, totalPages: listed.total_pages, results: hits(listed.results, mediaType) };
   }
 

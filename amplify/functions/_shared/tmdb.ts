@@ -214,9 +214,6 @@ export const tmdb = {
       'vote_count.gte': 50,
     }),
 
-  similar: (mediaType: 'movie' | 'tv', id: number, page = 1) =>
-    tmdbFetch<TmdbPage>(`/${mediaType}/${id}/similar`, { page, include_adult: false }),
-
   genres: (mediaType: 'movie' | 'tv') =>
     cached(
       `genres:${mediaType}`,
