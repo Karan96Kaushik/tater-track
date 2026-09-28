@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Loader2, Search } from 'lucide-react';
+import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +72,7 @@ export function DiscoverView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ tmdbId: number; mediaType: MediaType } | null>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(true);
 
   const region = settings?.region || 'US';
   const searching = query.trim().length > 0;
@@ -280,33 +281,51 @@ export function DiscoverView() {
       </div>
 
       {!searching && (
-        <div className="space-y-3">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {visibleCategories.map((entry) => (
-              <Button
-                key={entry.id}
-                type="button"
-                size="sm"
-                variant={!genre && !similar && category === entry.id ? 'default' : 'outline'}
-                className="rounded-full"
-                aria-pressed={!genre && !similar && category === entry.id}
-                onClick={() => chooseCategory(entry.id)}
-              >
-                {entry.label}
-              </Button>
-            ))}
-          </div>
+        <section className="space-y-3">
+          <button
+            type="button"
+            aria-expanded={categoriesOpen}
+            onClick={() => setCategoriesOpen((open) => !open)}
+            className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+          >
+            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Categories
+            </span>
+            <ChevronDown
+              className={cn('size-4 shrink-0 text-muted-foreground transition-transform', categoriesOpen && 'rotate-180')}
+              aria-hidden
+            />
+          </button>
+          {categoriesOpen && (
+            <div className="space-y-3">
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {visibleCategories.map((entry) => (
+                  <Button
+                    key={entry.id}
+                    type="button"
+                    size="sm"
+                    variant={!genre && !similar && category === entry.id ? 'default' : 'outline'}
+                    className="rounded-full"
+                    aria-pressed={!genre && !similar && category === entry.id}
+                    onClick={() => chooseCategory(entry.id)}
+                  >
+                    {entry.label}
+                  </Button>
+                ))}
+              </div>
 
-          <GenreRow
-            label={filter === 'multi' ? 'Movie genres' : 'Genres'}
-            genres={filter === 'tv' ? tvGenres : movieGenres}
-            selected={genre}
-            onSelect={chooseGenre}
-          />
-          {filter === 'multi' && (
-            <GenreRow label="TV genres" genres={tvGenres} selected={genre} onSelect={chooseGenre} />
+              <GenreRow
+                label={filter === 'multi' ? 'Movie genres' : 'Genres'}
+                genres={filter === 'tv' ? tvGenres : movieGenres}
+                selected={genre}
+                onSelect={chooseGenre}
+              />
+              {filter === 'multi' && (
+                <GenreRow label="TV genres" genres={tvGenres} selected={genre} onSelect={chooseGenre} />
+              )}
+            </div>
           )}
-        </div>
+        </section>
       )}
 
       <div className="flex items-center gap-2">
