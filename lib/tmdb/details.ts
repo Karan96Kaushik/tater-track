@@ -278,14 +278,53 @@ async function fillSeasons(
       seasonNumbers: misses,
       includeSpecials,
     });
+    const stillMissing: number[] = [];
     for (const seasonNumber of misses) {
-      const episodes = filled.episodesBySeason?.[String(seasonNumber)];
+      const episodes = episodesFor(filled, seasonNumber);
       if (episodes) deferreds.get(seasonNumber)?.resolve(episodes);
-      else deferreds.get(seasonNumber)?.reject(new Error(`Could not load season ${seasonNumber}`));
+      else stillMissing.push(seasonNumber);
+    }
+    // A details function that has not been redeployed ignores seasonNumbers and
+    // returns only one season. Fetch the rest one at a time.
+    if (stillMissing.length > 0) {
+      await mapLimit(stillMissing, 4, async (seasonNumber) => {
+        try {
+          const single = await mediaApi.details({
+            tmdbId,
+            mediaType: 'tv',
+            seasonNumber,
+            includeSpecials,
+          });
+          const episodes = episodesFor(single, seasonNumber);
+          if (episodes) deferreds.get(seasonNumber)?.resolve(episodes);
+          else deferreds.get(seasonNumber)?.reject(new Error(`Could not load season ${seasonNumber}`));
+        } catch (error) {
+          deferreds.get(seasonNumber)?.reject(error);
+        }
+      });
     }
   } catch (error) {
     for (const seasonNumber of misses) deferreds.get(seasonNumber)?.reject(error);
   }
+}
+
+function episodesFor(details: MediaDetails, seasonNumber: number): EpisodeDetail[] | null {
+  const batched = details.episodesBySeason?.[String(seasonNumber)];
+  if (batched) return batched;
+  if (details.episodes?.[0]?.seasonNumber === seasonNumber) return details.episodes;
+  return null;
+}
+
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
 }
 
 /**
